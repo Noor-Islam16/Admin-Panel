@@ -11,6 +11,7 @@ import CustomerList from "./pages/CustomerList";
 import AddProducts from "./pages/AddProducts";
 import ViewProducts from "./pages/ViewProducts";
 import { adminRoutes } from "./config/routes.config";
+import ManageStocks from "./pages/ManageStocks";
 
 // ── Placeholder for sections not built yet ────────────────────────────────
 const ComingSoon = ({ title }: { title: string }) => (
@@ -66,7 +67,7 @@ const router = createBrowserRouter([
       },
       {
         path: adminRoutes.STOCKS.replace("/", ""),
-        element: <ComingSoon title="Manage Stocks" />,
+        element: <ManageStocks />,
       },
       {
         path: adminRoutes.ORDERS.replace("/", ""),

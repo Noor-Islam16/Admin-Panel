@@ -144,10 +144,12 @@ function ProductImage({
   src,
   name,
   size = 56,
+  fill = false,
 }: {
   src?: string;
   name: string;
   size?: number;
+  fill?: boolean;
 }) {
   const [err, setErr] = useState(false);
   const imageSrc = Array.isArray(src) ? src[0] : src;
@@ -157,16 +159,38 @@ function ProductImage({
       <div
         className="flex items-center justify-center rounded-2xl flex-shrink-0"
         style={{
-          width: size,
-          height: size,
+          width: fill ? "100%" : size,
+          height: fill ? "100%" : size,
           background: Colors.surfaceAlt,
           border: `1px solid ${Colors.border}`,
         }}
       >
-        <ImageOff size={size * 0.4} color={Colors.border} strokeWidth={1.5} />
+        <ImageOff
+          size={fill ? 40 : size * 0.4}
+          color={Colors.border}
+          strokeWidth={1.5}
+        />
       </div>
     );
   }
+
+  if (fill) {
+    return (
+      <img
+        src={imageSrc}
+        alt={name}
+        onError={() => setErr(true)}
+        className="w-full h-full object-cover"
+        style={{
+          width: "100%",
+          height: "100%",
+          objectFit: "cover",
+          display: "block",
+        }}
+      />
+    );
+  }
+
   return (
     <img
       src={imageSrc}
@@ -1165,17 +1189,18 @@ export default function ViewProducts() {
                           height: 160,
                           width: "100%",
                           background: Colors.surfaceAlt,
+                          overflow: "hidden",
                         }}
                       >
                         <ProductImage
                           src={product.images[0]}
                           name={product.name}
-                          size={160}
+                          fill={true}
                         />
                         {/* Discount badge */}
                         {product.discount && (
                           <div
-                            className="absolute top-3 left-3 px-2 py-0.5 rounded-lg text-xs font-bold"
+                            className="absolute top-3 left-3 px-2 py-0.5 rounded-lg text-xs font-bold z-10"
                             style={{
                               background: Colors.error,
                               color: Colors.white,
@@ -1186,16 +1211,16 @@ export default function ViewProducts() {
                         )}
                         {/* Stock badge */}
                         <div
-                          className="absolute top-3 right-3 px-2.5 py-1 rounded-xl text-xs font-semibold"
-                          style={{ background: stock.bg, color: stock.color }}
+                          className="absolute top-3 right-3 px-2.5 py-1 rounded-xl text-xs font-semibold z-10"
+                          style={{ background: "black", color: "white" }}
                         >
                           {stock.label}
                         </div>
                         {/* Fast Moving badge */}
                         {product.fastMoving && (
                           <div
-                            className="absolute bottom-3 left-3"
-                            style={{ color: Colors.info }}
+                            className="absolute bottom-3 left-3 z-10"
+                            style={{ color: "black" }}
                           >
                             <Flame
                               size={18}

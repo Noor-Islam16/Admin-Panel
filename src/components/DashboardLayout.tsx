@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import {
   Users,
@@ -8,27 +7,58 @@ import {
   Settings,
   LogOut,
   ShieldCheck,
-  Menu,
-  X,
   ChevronRight,
   ClipboardList,
 } from "lucide-react";
 import Colors from "../constants/colors";
+import { adminRoutes } from "../config/routes.config";
 
 const NAV_ITEMS = [
-  { label: "Customer List", icon: Users, path: "/dashboard/customers" },
-  { label: "Add Products", icon: PackagePlus, path: "/dashboard/add-products" },
-  { label: "View Products", icon: Package, path: "/dashboard/view-products" },
-  { label: "Manage Stocks", icon: Boxes, path: "/dashboard/stocks" },
-  { label: "Orders", icon: ClipboardList, path: "/dashboard/orders" },
-  { label: "Settings", icon: Settings, path: "/dashboard/settings" },
+  {
+    label: "Customer List",
+    shortLabel: "Customers",
+    icon: Users,
+    path: `${adminRoutes.BASE}${adminRoutes.CUSTOMERS}`,
+  },
+  {
+    label: "Add Products",
+    shortLabel: "Add",
+    icon: PackagePlus,
+    path: `${adminRoutes.BASE}${adminRoutes.ADD_PRODUCTS}`,
+  },
+  {
+    label: "View Products",
+    shortLabel: "Products",
+    icon: Package,
+    path: `${adminRoutes.BASE}${adminRoutes.VIEW_PRODUCTS}`,
+  },
+  {
+    label: "Manage Stocks",
+    shortLabel: "Stocks",
+    icon: Boxes,
+    path: `${adminRoutes.BASE}${adminRoutes.STOCKS}`,
+  },
+  {
+    label: "Orders",
+    shortLabel: "Orders",
+    icon: ClipboardList,
+    path: `${adminRoutes.BASE}${adminRoutes.ORDERS}`,
+  },
+  {
+    label: "Settings",
+    shortLabel: "Settings",
+    icon: Settings,
+    path: `${adminRoutes.BASE}${adminRoutes.SETTINGS}`,
+  },
 ];
 
 export default function DashboardLayout() {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const navigate = useNavigate();
 
-  const handleLogout = () => navigate("/");
+  const handleLogout = () => {
+    localStorage.removeItem("adminAuth");
+    navigate("/");
+  };
 
   return (
     <div
@@ -38,27 +68,17 @@ export default function DashboardLayout() {
         fontFamily: "'DM Sans', 'Segoe UI', sans-serif",
       }}
     >
-      {/* ── Mobile Overlay ── */}
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 z-20 lg:hidden"
-          style={{ background: Colors.overlay }}
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-
       {/* ══════════════════════════════════════
-          SIDEBAR
+          DESKTOP SIDEBAR (lg+)
       ══════════════════════════════════════ */}
       <aside
-        className="fixed lg:static inset-y-0 left-0 z-30 flex flex-col w-64 transition-transform duration-300 ease-in-out lg:translate-x-0"
+        className="hidden lg:flex flex-col w-64 flex-shrink-0"
         style={{
           background: `linear-gradient(180deg, ${Colors.accent} 0%, ${Colors.gradientEnd} 60%, #0a6b5e 100%)`,
-          transform: sidebarOpen ? "translateX(0)" : undefined,
           boxShadow: "4px 0 24px rgba(0,0,0,0.15)",
         }}
       >
-        {/* ── Brand Header ── */}
+        {/* Brand Header */}
         <div
           className="flex items-center gap-3 px-5 py-5 relative overflow-hidden"
           style={{ borderBottom: "1px solid rgba(255,255,255,0.12)" }}
@@ -92,13 +112,12 @@ export default function DashboardLayout() {
           </div>
         </div>
 
-        {/* ── Nav Items ── */}
+        {/* Nav Items — full label names on desktop */}
         <nav className="flex-1 px-3 py-4 flex flex-col gap-1 overflow-y-auto">
           {NAV_ITEMS.map(({ label, icon: Icon, path }) => (
             <NavLink
               key={path}
               to={path}
-              onClick={() => setSidebarOpen(false)}
               className="group relative flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-medium transition-all duration-200 cursor-pointer"
               style={({ isActive }) => ({
                 background: isActive ? Colors.primaryLight : "transparent",
@@ -133,7 +152,7 @@ export default function DashboardLayout() {
           ))}
         </nav>
 
-        {/* ── Logout ── */}
+        {/* Logout */}
         <div
           className="px-3 pb-5"
           style={{
@@ -166,9 +185,9 @@ export default function DashboardLayout() {
           MAIN AREA
       ══════════════════════════════════════ */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* ── Top Bar ── */}
+        {/* ── Top Header ── */}
         <header
-          className="flex items-center justify-between px-6 py-4 flex-shrink-0"
+          className="flex items-center justify-between px-4 lg:px-6 py-3 lg:py-4 flex-shrink-0"
           style={{
             background: Colors.surface,
             borderBottom: `1px solid ${Colors.border}`,
@@ -176,16 +195,18 @@ export default function DashboardLayout() {
           }}
         >
           <div className="flex items-center gap-3">
-            <button
-              className="lg:hidden p-2 rounded-xl transition-colors"
-              style={{ color: Colors.textSecondary }}
-              onClick={() => setSidebarOpen((v) => !v)}
+            {/* Mobile/tablet: show brand shield since there's no sidebar */}
+            <div
+              className="lg:hidden w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
+              style={{
+                background: `linear-gradient(135deg, ${Colors.accent}, ${Colors.gradientEnd})`,
+              }}
             >
-              {sidebarOpen ? <X size={22} /> : <Menu size={22} />}
-            </button>
+              <ShieldCheck size={16} color={Colors.white} strokeWidth={1.8} />
+            </div>
             <div>
               <h2
-                className="text-base font-bold"
+                className="text-sm lg:text-base font-bold"
                 style={{ color: Colors.textPrimary }}
               >
                 Admin Dashboard
@@ -195,7 +216,18 @@ export default function DashboardLayout() {
               </p>
             </div>
           </div>
+
           <div className="flex items-center gap-3">
+            {/* Logout — mobile/tablet header only */}
+            <button
+              onClick={handleLogout}
+              className="lg:hidden p-2 rounded-xl transition-colors"
+              style={{ color: Colors.textSecondary }}
+              title="Logout"
+            >
+              <LogOut size={20} />
+            </button>
+
             <div className="text-right hidden sm:block">
               <p
                 className="text-sm font-semibold"
@@ -208,7 +240,7 @@ export default function DashboardLayout() {
               </p>
             </div>
             <div
-              className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold"
+              className="w-8 h-8 lg:w-9 lg:h-9 rounded-full flex items-center justify-center text-sm font-bold"
               style={{
                 background: `linear-gradient(135deg, ${Colors.gradientStart}, ${Colors.gradientEnd})`,
                 color: Colors.white,
@@ -220,10 +252,80 @@ export default function DashboardLayout() {
         </header>
 
         {/* ── Page Content ── */}
-        <main className="flex-1 overflow-y-auto p-6">
+        {/* pb-[80px] reserves space above the bottom tab bar on mobile/tablet */}
+        <main className="flex-1 overflow-y-auto p-4 lg:p-6 pb-[80px] lg:pb-6">
           <Outlet />
         </main>
       </div>
+
+      {/* ══════════════════════════════════════
+          MOBILE / TABLET BOTTOM TAB BAR (below lg)
+          Uses shortLabel to keep tabs compact
+      ══════════════════════════════════════ */}
+      <nav
+        className="lg:hidden fixed bottom-0 left-0 right-0 z-40 flex items-stretch"
+        style={{
+          background: `linear-gradient(135deg, ${Colors.accent} 0%, ${Colors.gradientEnd} 100%)`,
+          boxShadow: "0 -4px 20px rgba(0,0,0,0.18)",
+          height: "64px",
+          borderTop: "1px solid rgba(255,255,255,0.1)",
+        }}
+      >
+        {NAV_ITEMS.map(({ shortLabel, icon: Icon, path }) => (
+          <NavLink
+            key={path}
+            to={path}
+            className="flex-1 flex flex-col items-center justify-center gap-0.5 relative transition-all duration-200"
+            style={({ isActive }) => ({
+              color: isActive ? Colors.white : "rgba(255,255,255,0.55)",
+            })}
+          >
+            {({ isActive }) => (
+              <>
+                {/* Active top pill indicator */}
+                {isActive && (
+                  <div
+                    className="absolute top-0 left-1/2 -translate-x-1/2 rounded-b-full"
+                    style={{
+                      width: "32px",
+                      height: "3px",
+                      background: Colors.white,
+                    }}
+                  />
+                )}
+
+                {/* Icon with frosted active bg */}
+                <div
+                  className="flex items-center justify-center rounded-xl transition-all duration-200"
+                  style={{
+                    width: isActive ? "38px" : "32px",
+                    height: isActive ? "28px" : "24px",
+                    background: isActive
+                      ? "rgba(255,255,255,0.2)"
+                      : "transparent",
+                  }}
+                >
+                  <Icon
+                    size={isActive ? 19 : 17}
+                    strokeWidth={isActive ? 2.2 : 1.7}
+                  />
+                </div>
+
+                <span
+                  style={{
+                    fontSize: isActive ? "10px" : "9px",
+                    fontWeight: isActive ? "700" : "500",
+                    letterSpacing: "0.02em",
+                    transition: "all 0.2s",
+                  }}
+                >
+                  {shortLabel}
+                </span>
+              </>
+            )}
+          </NavLink>
+        ))}
+      </nav>
 
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
