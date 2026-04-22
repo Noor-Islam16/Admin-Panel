@@ -14,74 +14,123 @@ import {
   AlertCircle,
   X,
   Download,
-  Eye,
   Trash2,
   ChevronDown,
   Link,
+  Star,
+  Award,
+  TrendingUp,
 } from "lucide-react";
 import Colors from "../constants/colors";
+import {
+  CATEGORIES,
+  type Product,
+  type ProductTag,
+} from "../constants/products";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface ProductForm {
   name: string;
+  brand: string;
   category: string;
+  subCategory: string;
   price: string;
-  mrp: string;
+  originalPrice: string;
   unit: string;
+  weight: string;
   description: string;
   imageUrl: string;
-  stockLimited: boolean;
-  stockQty: string;
+  minOrderQty: string;
+  fastMoving: boolean;
+  featured: boolean;
+  stock: string;
+  tags: ProductTag[];
 }
 
 interface BulkRow {
   id: string;
   name: string;
+  brand: string;
   category: string;
+  subCategory: string;
   price: string;
-  mrp: string;
+  originalPrice: string;
   unit: string;
+  weight: string;
   description: string;
   image_url: string;
-  stock_limited: string;
-  stock_qty: string;
+  min_order_qty: string;
+  fast_moving: string;
+  featured: string;
+  stock: string;
+  tags: string;
   status: "valid" | "error";
   error?: string;
 }
 
-const CATEGORIES = [
-  "Tablets & Capsules",
-  "Syrups & Liquids",
-  "Injections",
-  "Ointments & Creams",
-  "Drops",
-  "Medical Devices",
-  "Vitamins & Supplements",
-  "Ayurvedic",
-  "Other",
-];
+// Get unique subcategories from existing products (you can also define this separately)
+const SUBCATEGORIES: Record<string, string[]> = {
+  groceries: [
+    "Rice & Grains",
+    "Pulses",
+    "Oils",
+    "Flour",
+    "Spices",
+    "Dry Fruits",
+  ],
+  snacks: ["Chips", "Namkeen", "Chocolate", "Biscuits", "Sweets"],
+  beverages: ["Soft Drinks", "Tea", "Coffee", "Juices", "Water"],
+  household: ["Detergent", "Cleaners", "Utensils", "Tissues", "Air Fresheners"],
+  personal: [
+    "Hair Care",
+    "Bath & Body",
+    "Oral Care",
+    "Skin Care",
+    "Deodorants",
+  ],
+};
 
 const UNITS = [
-  "Strip",
-  "Bottle",
-  "Tube",
-  "Vial",
-  "Sachet",
-  "Piece",
-  "Box",
-  "Pack",
+  "kg",
+  "ltr",
+  "pack",
+  "can",
+  "jar",
+  "tetra pack",
+  "bottle",
+  "piece",
+  "box",
+];
+
+const PRODUCT_TAGS: ProductTag[] = [
+  "Limited Stock",
+  "Out of Stock",
+  "Fast Moving",
+  "New Arrival",
+  "Best Seller",
+  "Special Offer",
+  "Trending",
+  "Premium",
+  "Organic",
+  "Imported",
 ];
 
 const EMPTY_FORM: ProductForm = {
   name: "",
+  brand: "",
   category: "",
+  subCategory: "",
   price: "",
-  mrp: "",
-  unit: "Strip",
+  originalPrice: "",
+  unit: "pack",
+  weight: "",
   description: "",
   imageUrl: "",
-  stockLimited: false,
-  stockQty: "",
+  minOrderQty: "1",
+  fastMoving: false,
+  featured: false,
+  stock: "",
+  tags: [],
 };
 
 // ── Shared Input Style ────────────────────────────────────────────────────────
@@ -183,6 +232,91 @@ function Toast({
   );
 }
 
+// ── Tag Selector Component ────────────────────────────────────────────────────
+function TagSelector({
+  selectedTags,
+  onToggle,
+}: {
+  selectedTags: ProductTag[];
+  onToggle: (tag: ProductTag) => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm"
+        style={{
+          background: Colors.surfaceAlt,
+          border: `1.5px solid ${Colors.border}`,
+          color: Colors.textPrimary,
+        }}
+      >
+        <span>
+          {selectedTags.length
+            ? selectedTags.join(", ")
+            : "Select product tags..."}
+        </span>
+        <ChevronDown
+          size={16}
+          style={{
+            color: Colors.textMuted,
+            transform: open ? "rotate(180deg)" : "none",
+            transition: "transform 0.2s",
+          }}
+        />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div
+            className="absolute z-20 mt-1 w-full rounded-2xl p-2 max-h-60 overflow-y-auto shadow-xl"
+            style={{
+              background: Colors.surface,
+              border: `1px solid ${Colors.border}`,
+            }}
+          >
+            {PRODUCT_TAGS.map((tag) => (
+              <label
+                key={tag}
+                className="flex items-center gap-2 px-3 py-2 rounded-xl cursor-pointer transition-colors"
+                style={{
+                  background: selectedTags.includes(tag)
+                    ? Colors.primaryLight
+                    : "transparent",
+                }}
+                onMouseEnter={(e) => {
+                  if (!selectedTags.includes(tag)) {
+                    (e.currentTarget as HTMLElement).style.background =
+                      Colors.surfaceAlt;
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!selectedTags.includes(tag)) {
+                    (e.currentTarget as HTMLElement).style.background =
+                      "transparent";
+                  }
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedTags.includes(tag)}
+                  onChange={() => onToggle(tag)}
+                  className="w-4 h-4 rounded accent-[#00A884]"
+                />
+                <span className="text-sm" style={{ color: Colors.textPrimary }}>
+                  {tag}
+                </span>
+              </label>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ══════════════════════════════════════════════════════════════════════════════
 //  MAIN COMPONENT
 // ══════════════════════════════════════════════════════════════════════════════
@@ -209,8 +343,10 @@ export default function AddProducts() {
   };
 
   // ── Single Form Handlers ──────────────────────────────────────────────────
-  const set = (key: keyof ProductForm, value: string | boolean) =>
-    setForm((prev) => ({ ...prev, [key]: value }));
+  const set = (
+    key: keyof ProductForm,
+    value: string | boolean | ProductTag[],
+  ) => setForm((prev) => ({ ...prev, [key]: value }));
 
   const handleImageUrlBlur = () => {
     setFocused("");
@@ -218,14 +354,57 @@ export default function AddProducts() {
     else setImagePreview("");
   };
 
+  const toggleTag = (tag: ProductTag) => {
+    setForm((prev) => ({
+      ...prev,
+      tags: prev.tags.includes(tag)
+        ? prev.tags.filter((t) => t !== tag)
+        : [...prev.tags, tag],
+    }));
+  };
+
   const validateSingle = (): string | null => {
     if (!form.name.trim()) return "Product name is required.";
     if (!form.category) return "Please select a category.";
     if (!form.price || isNaN(Number(form.price)) || Number(form.price) <= 0)
       return "Enter a valid selling price.";
-    if (form.stockLimited && (!form.stockQty || isNaN(Number(form.stockQty))))
+    if (!form.stock || isNaN(Number(form.stock)) || Number(form.stock) < 0)
       return "Enter a valid stock quantity.";
     return null;
+  };
+
+  const buildProductPayload = (): Omit<
+    Product,
+    "id" | "rating" | "reviewCount"
+  > => {
+    const price = Number(form.price);
+    const originalPrice = form.originalPrice
+      ? Number(form.originalPrice)
+      : undefined;
+    const discount =
+      originalPrice && originalPrice > price
+        ? Math.round(((originalPrice - price) / originalPrice) * 100)
+        : undefined;
+
+    return {
+      name: form.name.trim(),
+      brand: form.brand.trim() || undefined,
+      category: form.category,
+      subCategory: form.subCategory || undefined,
+      price,
+      originalPrice,
+      discount,
+      stock: Number(form.stock),
+      minOrderQty: form.minOrderQty ? Number(form.minOrderQty) : undefined,
+      images: form.imageUrl ? [form.imageUrl] : [],
+      tags: form.tags,
+      description: form.description.trim(),
+      unit: form.unit,
+      weight: form.weight || undefined,
+      fastMoving: form.fastMoving,
+      inStock: Number(form.stock) > 0,
+      featured: form.featured,
+    };
   };
 
   const handleSingleSubmit = async () => {
@@ -236,8 +415,9 @@ export default function AddProducts() {
     }
     setSubmitting(true);
     await new Promise((r) => setTimeout(r, 1200));
-    // TODO: POST /api/products  with form data
-    console.log("Product payload:", form);
+    const payload = buildProductPayload();
+    // TODO: POST /api/products with payload
+    console.log("Product payload:", payload);
     showToast("success", `"${form.name}" added successfully!`);
     setForm(EMPTY_FORM);
     setImagePreview("");
@@ -257,23 +437,31 @@ export default function AddProducts() {
         obj[h] = vals[idx] ?? "";
       });
 
-      const hasError = !obj["name"] || !obj["price"];
+      const hasError = !obj["name"] || !obj["price"] || !obj["stock"];
       return {
         id: String(i),
         name: obj["name"] ?? "",
+        brand: obj["brand"] ?? "",
         category: obj["category"] ?? "",
+        subCategory: obj["sub_category"] ?? "",
         price: obj["price"] ?? "",
-        mrp: obj["mrp"] ?? "",
-        unit: obj["unit"] ?? "Strip",
+        originalPrice: obj["original_price"] ?? "",
+        unit: obj["unit"] ?? "pack",
+        weight: obj["weight"] ?? "",
         description: obj["description"] ?? "",
         image_url: obj["image_url"] ?? "",
-        stock_limited: obj["stock_limited"] ?? "no",
-        stock_qty: obj["stock_qty"] ?? "",
+        min_order_qty: obj["min_order_qty"] ?? "1",
+        fast_moving: obj["fast_moving"] ?? "no",
+        featured: obj["featured"] ?? "no",
+        stock: obj["stock"] ?? "",
+        tags: obj["tags"] ?? "",
         status: hasError ? "error" : "valid",
         error: hasError
           ? !obj["name"]
             ? "Name missing"
-            : "Price missing"
+            : !obj["price"]
+              ? "Price missing"
+              : "Stock missing"
           : undefined,
       };
     });
@@ -316,7 +504,7 @@ export default function AddProducts() {
     }
     setBulkSubmitting(true);
     await new Promise((r) => setTimeout(r, 1500));
-    // TODO: POST /api/products/bulk  with valid rows
+    // TODO: POST /api/products/bulk with valid rows
     console.log("Bulk payload:", valid);
     showToast(
       "success",
@@ -327,7 +515,7 @@ export default function AddProducts() {
   };
 
   const downloadTemplate = () => {
-    const csv = `name,category,price,mrp,unit,description,image_url,stock_limited,stock_qty\nPan-D Tablet,Tablets & Capsules,52,65,Strip,For acidity and reflux,https://example.com/image.jpg,yes,100\n`;
+    const csv = `name,brand,category,sub_category,price,original_price,unit,weight,description,image_url,min_order_qty,fast_moving,featured,stock,tags\nPremium Basmati Rice,India Gate,groceries,Rice & Grains,185,220,kg,5kg,Premium aged basmati rice,https://example.com/rice.jpg,2,yes,yes,50,"Best Seller,Fast Moving"\nOrganic Toor Dal,Tata Sampann,groceries,Pulses,145,165,kg,1kg,Unpolished toor dal,https://example.com/dal.jpg,1,yes,no,35,"Organic,Best Seller"`;
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -341,6 +529,11 @@ export default function AddProducts() {
   const inputClass =
     "w-full bg-transparent pl-10 pr-4 py-3.5 text-sm outline-none";
   const inputStyle = { color: Colors.textPrimary };
+
+  // Get available subcategories based on selected category
+  const availableSubcategories = form.category
+    ? SUBCATEGORIES[form.category] || []
+    : [];
 
   return (
     <>
@@ -406,32 +599,61 @@ export default function AddProducts() {
                 Product Details
               </p>
 
-              {/* Name */}
-              <div className="flex flex-col gap-1.5">
-                <FieldLabel>Product Name *</FieldLabel>
-                <InputWrapper focused={focused === "name"}>
-                  <div
-                    className="absolute left-3.5"
-                    style={{
-                      color:
-                        focused === "name" ? Colors.primary : Colors.textMuted,
-                    }}
-                  >
-                    <Tag size={17} strokeWidth={2} />
-                  </div>
-                  <input
-                    className={inputClass}
-                    style={inputStyle}
-                    placeholder="e.g. Pan-D 40mg Tablet"
-                    value={form.name}
-                    onChange={(e) => set("name", e.target.value)}
-                    onFocus={() => setFocused("name")}
-                    onBlur={() => setFocused("")}
-                  />
-                </InputWrapper>
+              {/* Name + Brand row */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <FieldLabel>Product Name *</FieldLabel>
+                  <InputWrapper focused={focused === "name"}>
+                    <div
+                      className="absolute left-3.5"
+                      style={{
+                        color:
+                          focused === "name"
+                            ? Colors.primary
+                            : Colors.textMuted,
+                      }}
+                    >
+                      <Tag size={17} strokeWidth={2} />
+                    </div>
+                    <input
+                      className={inputClass}
+                      style={inputStyle}
+                      placeholder="e.g. Premium Basmati Rice"
+                      value={form.name}
+                      onChange={(e) => set("name", e.target.value)}
+                      onFocus={() => setFocused("name")}
+                      onBlur={() => setFocused("")}
+                    />
+                  </InputWrapper>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <FieldLabel>Brand</FieldLabel>
+                  <InputWrapper focused={focused === "brand"}>
+                    <div
+                      className="absolute left-3.5"
+                      style={{
+                        color:
+                          focused === "brand"
+                            ? Colors.primary
+                            : Colors.textMuted,
+                      }}
+                    >
+                      <Award size={17} strokeWidth={2} />
+                    </div>
+                    <input
+                      className={inputClass}
+                      style={inputStyle}
+                      placeholder="e.g. India Gate"
+                      value={form.brand}
+                      onChange={(e) => set("brand", e.target.value)}
+                      onFocus={() => setFocused("brand")}
+                      onBlur={() => setFocused("")}
+                    />
+                  </InputWrapper>
+                </div>
               </div>
 
-              {/* Category + Unit row */}
+              {/* Category + SubCategory row */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="flex flex-col gap-1.5">
                   <FieldLabel>Category *</FieldLabel>
@@ -456,16 +678,19 @@ export default function AddProducts() {
                         background: "transparent",
                       }}
                       value={form.category}
-                      onChange={(e) => set("category", e.target.value)}
+                      onChange={(e) => {
+                        set("category", e.target.value);
+                        set("subCategory", ""); // Reset subcategory when category changes
+                      }}
                       onFocus={() => setFocused("category")}
                       onBlur={() => setFocused("")}
                     >
                       <option value="" disabled>
                         Select category
                       </option>
-                      {CATEGORIES.map((c) => (
-                        <option key={c} value={c}>
-                          {c}
+                      {CATEGORIES.filter((c) => c.id !== "all").map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.icon} {c.name}
                         </option>
                       ))}
                     </select>
@@ -479,7 +704,113 @@ export default function AddProducts() {
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  <FieldLabel>Unit</FieldLabel>
+                  <FieldLabel>Sub Category</FieldLabel>
+                  <InputWrapper focused={focused === "subCategory"}>
+                    <div
+                      className="absolute left-3.5"
+                      style={{
+                        color:
+                          focused === "subCategory"
+                            ? Colors.primary
+                            : Colors.textMuted,
+                      }}
+                    >
+                      <Boxes size={17} strokeWidth={2} />
+                    </div>
+                    <select
+                      className={`${inputClass} appearance-none cursor-pointer`}
+                      style={{
+                        color: form.subCategory
+                          ? Colors.textPrimary
+                          : Colors.textMuted,
+                        background: "transparent",
+                      }}
+                      value={form.subCategory}
+                      onChange={(e) => set("subCategory", e.target.value)}
+                      onFocus={() => setFocused("subCategory")}
+                      onBlur={() => setFocused("")}
+                      disabled={!form.category}
+                    >
+                      <option value="">Select sub category</option>
+                      {availableSubcategories.map((sc) => (
+                        <option key={sc} value={sc}>
+                          {sc}
+                        </option>
+                      ))}
+                    </select>
+                    <div
+                      className="absolute right-3.5 pointer-events-none"
+                      style={{ color: Colors.textMuted }}
+                    >
+                      <ChevronDown size={16} />
+                    </div>
+                  </InputWrapper>
+                </div>
+              </div>
+
+              {/* Price + Original Price row */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <FieldLabel>Selling Price (₹) *</FieldLabel>
+                  <InputWrapper focused={focused === "price"}>
+                    <div
+                      className="absolute left-3.5"
+                      style={{
+                        color:
+                          focused === "price"
+                            ? Colors.primary
+                            : Colors.textMuted,
+                      }}
+                    >
+                      <IndianRupee size={17} strokeWidth={2} />
+                    </div>
+                    <input
+                      className={inputClass}
+                      style={inputStyle}
+                      type="number"
+                      min="0"
+                      placeholder="0.00"
+                      value={form.price}
+                      onChange={(e) => set("price", e.target.value)}
+                      onFocus={() => setFocused("price")}
+                      onBlur={() => setFocused("")}
+                    />
+                  </InputWrapper>
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <FieldLabel>Original Price / MRP (₹)</FieldLabel>
+                  <InputWrapper focused={focused === "originalPrice"}>
+                    <div
+                      className="absolute left-3.5"
+                      style={{
+                        color:
+                          focused === "originalPrice"
+                            ? Colors.primary
+                            : Colors.textMuted,
+                      }}
+                    >
+                      <IndianRupee size={17} strokeWidth={2} />
+                    </div>
+                    <input
+                      className={inputClass}
+                      style={inputStyle}
+                      type="number"
+                      min="0"
+                      placeholder="0.00"
+                      value={form.originalPrice}
+                      onChange={(e) => set("originalPrice", e.target.value)}
+                      onFocus={() => setFocused("originalPrice")}
+                      onBlur={() => setFocused("")}
+                    />
+                  </InputWrapper>
+                </div>
+              </div>
+
+              {/* Unit + Weight row */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <FieldLabel>Unit *</FieldLabel>
                   <InputWrapper focused={focused === "unit"}>
                     <div
                       className="absolute left-3.5"
@@ -517,59 +848,87 @@ export default function AddProducts() {
                     </div>
                   </InputWrapper>
                 </div>
-              </div>
 
-              {/* Price + MRP row */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="flex flex-col gap-1.5">
-                  <FieldLabel>Selling Price (₹) *</FieldLabel>
-                  <InputWrapper focused={focused === "price"}>
+                  <FieldLabel>Weight / Size</FieldLabel>
+                  <InputWrapper focused={focused === "weight"}>
                     <div
                       className="absolute left-3.5"
                       style={{
                         color:
-                          focused === "price"
+                          focused === "weight"
                             ? Colors.primary
                             : Colors.textMuted,
                       }}
                     >
-                      <IndianRupee size={17} strokeWidth={2} />
+                      <Boxes size={17} strokeWidth={2} />
+                    </div>
+                    <input
+                      className={inputClass}
+                      style={inputStyle}
+                      placeholder="e.g. 5kg, 500ml, 200g"
+                      value={form.weight}
+                      onChange={(e) => set("weight", e.target.value)}
+                      onFocus={() => setFocused("weight")}
+                      onBlur={() => setFocused("")}
+                    />
+                  </InputWrapper>
+                </div>
+              </div>
+
+              {/* Stock + Min Order Qty row */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <FieldLabel>Stock Quantity *</FieldLabel>
+                  <InputWrapper focused={focused === "stock"}>
+                    <div
+                      className="absolute left-3.5"
+                      style={{
+                        color:
+                          focused === "stock"
+                            ? Colors.primary
+                            : Colors.textMuted,
+                      }}
+                    >
+                      <Boxes size={17} strokeWidth={2} />
                     </div>
                     <input
                       className={inputClass}
                       style={inputStyle}
                       type="number"
                       min="0"
-                      placeholder="0.00"
-                      value={form.price}
-                      onChange={(e) => set("price", e.target.value)}
-                      onFocus={() => setFocused("price")}
+                      placeholder="e.g. 50"
+                      value={form.stock}
+                      onChange={(e) => set("stock", e.target.value)}
+                      onFocus={() => setFocused("stock")}
                       onBlur={() => setFocused("")}
                     />
                   </InputWrapper>
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  <FieldLabel>MRP (₹)</FieldLabel>
-                  <InputWrapper focused={focused === "mrp"}>
+                  <FieldLabel>Min Order Quantity</FieldLabel>
+                  <InputWrapper focused={focused === "minOrderQty"}>
                     <div
                       className="absolute left-3.5"
                       style={{
                         color:
-                          focused === "mrp" ? Colors.primary : Colors.textMuted,
+                          focused === "minOrderQty"
+                            ? Colors.primary
+                            : Colors.textMuted,
                       }}
                     >
-                      <IndianRupee size={17} strokeWidth={2} />
+                      <Boxes size={17} strokeWidth={2} />
                     </div>
                     <input
                       className={inputClass}
                       style={inputStyle}
                       type="number"
-                      min="0"
-                      placeholder="0.00"
-                      value={form.mrp}
-                      onChange={(e) => set("mrp", e.target.value)}
-                      onFocus={() => setFocused("mrp")}
+                      min="1"
+                      placeholder="1"
+                      value={form.minOrderQty}
+                      onChange={(e) => set("minOrderQty", e.target.value)}
+                      onFocus={() => setFocused("minOrderQty")}
                       onBlur={() => setFocused("")}
                     />
                   </InputWrapper>
@@ -602,7 +961,7 @@ export default function AddProducts() {
                     rows={3}
                     className="w-full bg-transparent pl-10 pr-4 py-3.5 text-sm outline-none resize-none"
                     style={{ color: Colors.textPrimary }}
-                    placeholder="Brief product description, usage notes…"
+                    placeholder="Brief product description, features, usage notes…"
                     value={form.description}
                     onChange={(e) => set("description", e.target.value)}
                     onFocus={() => setFocused("desc")}
@@ -613,7 +972,7 @@ export default function AddProducts() {
 
               {/* Image URL */}
               <div className="flex flex-col gap-1.5">
-                <FieldLabel>Image URL (Google Drive / CDN)</FieldLabel>
+                <FieldLabel>Image URL</FieldLabel>
                 <InputWrapper focused={focused === "img"}>
                   <div
                     className="absolute left-3.5"
@@ -627,7 +986,7 @@ export default function AddProducts() {
                   <input
                     className={inputClass}
                     style={inputStyle}
-                    placeholder="https://drive.google.com/... or https://cdn.example.com/img.jpg"
+                    placeholder="https://... (Unsplash or CDN link)"
                     value={form.imageUrl}
                     onChange={(e) => {
                       set("imageUrl", e.target.value);
@@ -638,77 +997,98 @@ export default function AddProducts() {
                   />
                 </InputWrapper>
                 <p className="text-xs" style={{ color: Colors.textMuted }}>
-                  Paste a direct image link. Google Drive: use the shareable
-                  direct link format.
+                  Paste a direct image link (e.g., from Unsplash or your CDN)
                 </p>
               </div>
 
-              {/* ── Stock Toggle ── */}
-              <div
-                className="flex items-center justify-between px-4 py-4 rounded-2xl"
-                style={{
-                  background: Colors.surfaceAlt,
-                  border: `1.5px solid ${Colors.border}`,
-                }}
-              >
-                <div>
-                  <p
-                    className="text-sm font-semibold"
-                    style={{ color: Colors.textPrimary }}
-                  >
-                    Limit Stock Orders
-                  </p>
-                  <p
-                    className="text-xs mt-0.5"
-                    style={{ color: Colors.textMuted }}
-                  >
-                    When enabled, orders stop once stock runs out
-                  </p>
-                </div>
-                <button
-                  onClick={() => set("stockLimited", !form.stockLimited)}
-                  style={{
-                    color: form.stockLimited
-                      ? Colors.primary
-                      : Colors.textMuted,
-                  }}
-                >
-                  {form.stockLimited ? (
-                    <ToggleRight size={36} strokeWidth={1.5} />
-                  ) : (
-                    <ToggleLeft size={36} strokeWidth={1.5} />
-                  )}
-                </button>
+              {/* Product Tags */}
+              <div className="flex flex-col gap-1.5">
+                <FieldLabel>Product Tags</FieldLabel>
+                <TagSelector selectedTags={form.tags} onToggle={toggleTag} />
               </div>
 
-              {/* Stock qty (shown only when limited) */}
-              {form.stockLimited && (
-                <div className="flex flex-col gap-1.5">
-                  <FieldLabel>Stock Quantity *</FieldLabel>
-                  <InputWrapper focused={focused === "qty"}>
-                    <div
-                      className="absolute left-3.5"
-                      style={{
-                        color:
-                          focused === "qty" ? Colors.primary : Colors.textMuted,
-                      }}
-                    >
-                      <Boxes size={17} strokeWidth={2} />
+              {/* ── Toggles Row ── */}
+              <div className="flex flex-col gap-3">
+                {/* Fast Moving Toggle */}
+                <div
+                  className="flex items-center justify-between px-4 py-3 rounded-2xl"
+                  style={{
+                    background: Colors.surfaceAlt,
+                    border: `1.5px solid ${Colors.border}`,
+                  }}
+                >
+                  <div className="flex items-center gap-2">
+                    <TrendingUp size={18} color={Colors.primary} />
+                    <div>
+                      <p
+                        className="text-sm font-semibold"
+                        style={{ color: Colors.textPrimary }}
+                      >
+                        Fast Moving Product
+                      </p>
+                      <p
+                        className="text-xs"
+                        style={{ color: Colors.textMuted }}
+                      >
+                        Highlight as a frequently purchased item
+                      </p>
                     </div>
-                    <input
-                      className={inputClass}
-                      style={inputStyle}
-                      type="number"
-                      min="0"
-                      placeholder="e.g. 200"
-                      value={form.stockQty}
-                      onChange={(e) => set("stockQty", e.target.value)}
-                      onFocus={() => setFocused("qty")}
-                      onBlur={() => setFocused("")}
-                    />
-                  </InputWrapper>
+                  </div>
+                  <button
+                    onClick={() => set("fastMoving", !form.fastMoving)}
+                    style={{
+                      color: form.fastMoving
+                        ? Colors.primary
+                        : Colors.textMuted,
+                    }}
+                  >
+                    {form.fastMoving ? (
+                      <ToggleRight size={36} strokeWidth={1.5} />
+                    ) : (
+                      <ToggleLeft size={36} strokeWidth={1.5} />
+                    )}
+                  </button>
                 </div>
-              )}
+
+                {/* Featured Toggle */}
+                <div
+                  className="flex items-center justify-between px-4 py-3 rounded-2xl"
+                  style={{
+                    background: Colors.surfaceAlt,
+                    border: `1.5px solid ${Colors.border}`,
+                  }}
+                >
+                  <div className="flex items-center gap-2">
+                    <Star size={18} color={Colors.warning} />
+                    <div>
+                      <p
+                        className="text-sm font-semibold"
+                        style={{ color: Colors.textPrimary }}
+                      >
+                        Featured Product
+                      </p>
+                      <p
+                        className="text-xs"
+                        style={{ color: Colors.textMuted }}
+                      >
+                        Show on homepage and featured sections
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => set("featured", !form.featured)}
+                    style={{
+                      color: form.featured ? Colors.primary : Colors.textMuted,
+                    }}
+                  >
+                    {form.featured ? (
+                      <ToggleRight size={36} strokeWidth={1.5} />
+                    ) : (
+                      <ToggleLeft size={36} strokeWidth={1.5} />
+                    )}
+                  </button>
+                </div>
+              </div>
 
               {/* Submit */}
               <button
@@ -816,16 +1196,26 @@ export default function AddProducts() {
 
                 {/* Mini product card */}
                 <div className="p-5 flex flex-col gap-2">
-                  <p
-                    className="text-sm font-bold leading-snug"
-                    style={{ color: Colors.textPrimary }}
-                  >
-                    {form.name || (
-                      <span style={{ color: Colors.textMuted }}>
-                        Product Name
-                      </span>
+                  <div>
+                    <p
+                      className="text-sm font-bold leading-snug"
+                      style={{ color: Colors.textPrimary }}
+                    >
+                      {form.name || (
+                        <span style={{ color: Colors.textMuted }}>
+                          Product Name
+                        </span>
+                      )}
+                    </p>
+                    {form.brand && (
+                      <p
+                        className="text-xs mt-0.5"
+                        style={{ color: Colors.textMuted }}
+                      >
+                        {form.brand}
+                      </p>
                     )}
-                  </p>
+                  </div>
                   {form.category && (
                     <span
                       className="text-xs font-medium px-2 py-0.5 rounded-lg w-fit"
@@ -834,7 +1224,9 @@ export default function AddProducts() {
                         color: Colors.primary,
                       }}
                     >
-                      {form.category}
+                      {CATEGORIES.find((c) => c.id === form.category)?.name ||
+                        form.category}
+                      {form.subCategory && ` · ${form.subCategory}`}
                     </span>
                   )}
                   <div className="flex items-baseline gap-2 mt-1">
@@ -846,14 +1238,15 @@ export default function AddProducts() {
                         ₹{form.price}
                       </p>
                     )}
-                    {form.mrp && Number(form.mrp) > Number(form.price) && (
-                      <p
-                        className="text-xs line-through"
-                        style={{ color: Colors.textMuted }}
-                      >
-                        ₹{form.mrp}
-                      </p>
-                    )}
+                    {form.originalPrice &&
+                      Number(form.originalPrice) > Number(form.price) && (
+                        <p
+                          className="text-xs line-through"
+                          style={{ color: Colors.textMuted }}
+                        >
+                          ₹{form.originalPrice}
+                        </p>
+                      )}
                     {form.unit && (
                       <p
                         className="text-xs"
@@ -863,23 +1256,54 @@ export default function AddProducts() {
                       </p>
                     )}
                   </div>
+                  {form.weight && (
+                    <p className="text-xs" style={{ color: Colors.textMuted }}>
+                      {form.weight}
+                    </p>
+                  )}
                   <div className="flex items-center gap-1.5 mt-1">
                     <div
                       className="w-2 h-2 rounded-full"
                       style={{
-                        background: form.stockLimited
-                          ? Colors.warning
-                          : Colors.success,
+                        background:
+                          Number(form.stock) > 0
+                            ? Colors.success
+                            : Colors.error,
                       }}
                     />
                     <p className="text-xs" style={{ color: Colors.textMuted }}>
-                      {form.stockLimited
-                        ? form.stockQty
-                          ? `${form.stockQty} units in stock`
-                          : "Stock limited"
-                        : "Unlimited stock"}
+                      {Number(form.stock) > 0
+                        ? `${form.stock} units in stock`
+                        : "Out of stock"}
                     </p>
                   </div>
+                  {form.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {form.tags.slice(0, 3).map((tag) => (
+                        <span
+                          key={tag}
+                          className="text-xs px-1.5 py-0.5 rounded-md"
+                          style={{
+                            background: Colors.surfaceAlt,
+                            color: Colors.textSecondary,
+                          }}
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                      {form.tags.length > 3 && (
+                        <span
+                          className="text-xs px-1.5 py-0.5 rounded-md"
+                          style={{
+                            background: Colors.surfaceAlt,
+                            color: Colors.textMuted,
+                          }}
+                        >
+                          +{form.tags.length - 3}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -895,12 +1319,13 @@ export default function AddProducts() {
                   className="text-xs font-bold uppercase tracking-wide"
                   style={{ color: Colors.accent }}
                 >
-                  💡 Image URL Tips
+                  💡 Quick Tips
                 </p>
                 {[
-                  "Google Drive: Share → Anyone with link → Copy direct URL",
-                  "Use a CDN link ending in .jpg / .png / .webp for best results",
-                  "The URL must be publicly accessible",
+                  "Use Unsplash for free product images",
+                  "Original price creates automatic discount display",
+                  "Fast Moving products get priority placement",
+                  "Add tags to help customers filter products",
                 ].map((t) => (
                   <p
                     key={t}
@@ -941,9 +1366,7 @@ export default function AddProducts() {
                 >
                   Download the CSV template → fill in your products → upload
                   below. Required columns: <strong>name</strong>,{" "}
-                  <strong>price</strong>. Optional: category, mrp, unit,
-                  description, <strong>image_url</strong>, stock_limited
-                  (yes/no), stock_qty.
+                  <strong>price</strong>, <strong>stock</strong>.
                 </p>
               </div>
               <button
@@ -1067,18 +1490,18 @@ export default function AddProducts() {
                 </div>
 
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[700px]">
+                  <table className="w-full min-w-[900px]">
                     <thead>
                       <tr style={{ background: Colors.surfaceAlt }}>
                         {[
                           "Status",
                           "Name",
+                          "Brand",
                           "Category",
                           "Price",
-                          "MRP",
-                          "Unit",
-                          "Image URL",
                           "Stock",
+                          "Unit",
+                          "Tags",
                           "",
                         ].map((h) => (
                           <th
@@ -1127,80 +1550,98 @@ export default function AddProducts() {
                             )}
                           </td>
                           <td
-                            className="px-4 py-3 text-sm font-medium"
+                            className="px-4 py-3 text-sm font-medium max-w-[180px] truncate"
                             style={{ color: Colors.textPrimary }}
+                            title={row.name}
                           >
                             {row.name || "—"}
+                          </td>
+                          <td
+                            className="px-4 py-3 text-sm max-w-[120px] truncate"
+                            style={{ color: Colors.textSecondary }}
+                            title={row.brand}
+                          >
+                            {row.brand || "—"}
                           </td>
                           <td
                             className="px-4 py-3 text-sm"
                             style={{ color: Colors.textSecondary }}
                           >
                             {row.category || "—"}
+                            {row.subCategory && (
+                              <span
+                                className="text-xs block"
+                                style={{ color: Colors.textMuted }}
+                              >
+                                {row.subCategory}
+                              </span>
+                            )}
                           </td>
                           <td
                             className="px-4 py-3 text-sm font-semibold"
                             style={{ color: Colors.primary }}
                           >
                             {row.price ? `₹${row.price}` : "—"}
-                          </td>
-                          <td
-                            className="px-4 py-3 text-sm"
-                            style={{ color: Colors.textMuted }}
-                          >
-                            {row.mrp ? `₹${row.mrp}` : "—"}
+                            {row.originalPrice &&
+                              Number(row.originalPrice) > Number(row.price) && (
+                                <span
+                                  className="text-xs line-through block"
+                                  style={{ color: Colors.textMuted }}
+                                >
+                                  ₹{row.originalPrice}
+                                </span>
+                              )}
                           </td>
                           <td
                             className="px-4 py-3 text-sm"
                             style={{ color: Colors.textSecondary }}
                           >
-                            {row.unit || "—"}
+                            {row.stock || "—"}
+                          </td>
+                          <td
+                            className="px-4 py-3 text-sm"
+                            style={{ color: Colors.textSecondary }}
+                          >
+                            {row.unit} {row.weight && `· ${row.weight}`}
                           </td>
                           <td className="px-4 py-3">
-                            {row.image_url ? (
-                              <div className="flex items-center gap-1.5">
-                                <Eye
-                                  size={14}
-                                  color={Colors.info}
-                                  strokeWidth={2}
-                                />
-                                <a
-                                  href={row.image_url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="text-xs underline truncate max-w-[120px] block"
-                                  style={{ color: Colors.info }}
+                            <div className="flex flex-wrap gap-1 max-w-[150px]">
+                              {row.tags ? (
+                                row.tags
+                                  .split(",")
+                                  .slice(0, 2)
+                                  .map((tag) => (
+                                    <span
+                                      key={tag}
+                                      className="text-xs px-1.5 py-0.5 rounded-md"
+                                      style={{
+                                        background: Colors.surfaceAlt,
+                                        color: Colors.textSecondary,
+                                      }}
+                                    >
+                                      {tag.trim()}
+                                    </span>
+                                  ))
+                              ) : (
+                                <span
+                                  className="text-xs"
+                                  style={{ color: Colors.textMuted }}
                                 >
-                                  {row.image_url}
-                                </a>
-                              </div>
-                            ) : (
-                              <span
-                                className="text-xs"
-                                style={{ color: Colors.textMuted }}
-                              >
-                                No image
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3">
-                            <span
-                              className="text-xs px-2 py-0.5 rounded-lg font-medium"
-                              style={{
-                                background:
-                                  row.stock_limited === "yes"
-                                    ? `${Colors.warning}18`
-                                    : Colors.surfaceAlt,
-                                color:
-                                  row.stock_limited === "yes"
-                                    ? Colors.warning
-                                    : Colors.textMuted,
-                              }}
-                            >
-                              {row.stock_limited === "yes"
-                                ? `Limited (${row.stock_qty || "?"})`
-                                : "Unlimited"}
-                            </span>
+                                  —
+                                </span>
+                              )}
+                              {row.tags && row.tags.split(",").length > 2 && (
+                                <span
+                                  className="text-xs px-1.5 py-0.5 rounded-md"
+                                  style={{
+                                    background: Colors.surfaceAlt,
+                                    color: Colors.textMuted,
+                                  }}
+                                >
+                                  +{row.tags.split(",").length - 2}
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="px-4 py-3">
                             <button

@@ -20,181 +20,51 @@ import {
   CheckCircle2,
   ImageOff,
   Filter,
+  Star,
+  Award,
+  TrendingUp,
+  Flame,
 } from "lucide-react";
 import Colors from "../constants/colors";
+import {
+  PRODUCTS,
+  CATEGORIES,
+  type Product,
+  type ProductTag,
+} from "../constants/products";
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-interface Product {
-  id: string;
-  name: string;
-  category: string;
-  price: number;
-  mrp: number;
-  unit: string;
-  description: string;
-  imageUrl: string;
-  stockLimited: boolean;
-  stockQty: number;
-  createdAt: string;
-}
-
-// ── Mock Data ─────────────────────────────────────────────────────────────────
-const MOCK_PRODUCTS: Product[] = [
-  {
-    id: "1",
-    name: "Pan-D 40mg Tablet",
-    category: "Tablets & Capsules",
-    price: 52,
-    mrp: 65,
-    unit: "Strip",
-    description: "For acidity and gastric reflux",
-    imageUrl: "https://placehold.co/300x300/E7F7F4/00A884?text=Pan-D",
-    stockLimited: true,
-    stockQty: 150,
-    createdAt: "2025-04-01",
-  },
-  {
-    id: "2",
-    name: "Calpol 500mg Syrup",
-    category: "Syrups & Liquids",
-    price: 38,
-    mrp: 45,
-    unit: "Bottle",
-    description: "Paracetamol syrup for fever and pain",
-    imageUrl: "https://placehold.co/300x300/E7F7F4/00A884?text=Calpol",
-    stockLimited: false,
-    stockQty: 0,
-    createdAt: "2025-04-02",
-  },
-  {
-    id: "3",
-    name: "Betadine Ointment",
-    category: "Ointments & Creams",
-    price: 85,
-    mrp: 100,
-    unit: "Tube",
-    description: "Antiseptic ointment for wound care",
-    imageUrl: "https://placehold.co/300x300/E7F7F4/00A884?text=Betadine",
-    stockLimited: true,
-    stockQty: 60,
-    createdAt: "2025-04-03",
-  },
-  {
-    id: "4",
-    name: "Azithromycin 500mg",
-    category: "Tablets & Capsules",
-    price: 120,
-    mrp: 145,
-    unit: "Strip",
-    description: "Antibiotic for bacterial infections",
-    imageUrl: "https://placehold.co/300x300/E7F7F4/00A884?text=Azithro",
-    stockLimited: true,
-    stockQty: 8,
-    createdAt: "2025-04-04",
-  },
-  {
-    id: "5",
-    name: "Vitamin D3 Drops",
-    category: "Drops",
-    price: 210,
-    mrp: 250,
-    unit: "Bottle",
-    description: "Vitamin D3 supplement for all ages",
-    imageUrl: "https://placehold.co/300x300/E7F7F4/00A884?text=VitD3",
-    stockLimited: false,
-    stockQty: 0,
-    createdAt: "2025-04-05",
-  },
-  {
-    id: "6",
-    name: "Insulin Syringe 1ml",
-    category: "Medical Devices",
-    price: 12,
-    mrp: 15,
-    unit: "Piece",
-    description: "Disposable insulin syringe",
-    imageUrl: "https://placehold.co/300x300/E7F7F4/00A884?text=Syringe",
-    stockLimited: true,
-    stockQty: 0,
-    createdAt: "2025-04-06",
-  },
-  {
-    id: "7",
-    name: "Liv 52 DS Tablet",
-    category: "Ayurvedic",
-    price: 175,
-    mrp: 200,
-    unit: "Box",
-    description: "Liver care supplement",
-    imageUrl: "https://placehold.co/300x300/E7F7F4/00A884?text=Liv52",
-    stockLimited: false,
-    stockQty: 0,
-    createdAt: "2025-04-07",
-  },
-  {
-    id: "8",
-    name: "ORS Electral Sachet",
-    category: "Vitamins & Supplements",
-    price: 14,
-    mrp: 18,
-    unit: "Sachet",
-    description: "Oral rehydration salts for dehydration",
-    imageUrl: "https://placehold.co/300x300/E7F7F4/00A884?text=ORS",
-    stockLimited: true,
-    stockQty: 300,
-    createdAt: "2025-04-08",
-  },
-];
-
-const CATEGORIES = [
-  "All",
-  "Tablets & Capsules",
-  "Syrups & Liquids",
-  "Injections",
-  "Ointments & Creams",
-  "Drops",
-  "Medical Devices",
-  "Vitamins & Supplements",
-  "Ayurvedic",
-  "Other",
-];
-const UNITS = [
-  "Strip",
-  "Bottle",
-  "Tube",
-  "Vial",
-  "Sachet",
-  "Piece",
-  "Box",
-  "Pack",
-];
+// ── Types for local state (matching the imported Product interface) ───────────
+// Using the imported Product type directly
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function stockStatus(p: Product): { label: string; color: string; bg: string } {
-  if (!p.stockLimited)
-    return {
-      label: "Unlimited",
-      color: Colors.success,
-      bg: `${Colors.success}18`,
-    };
-  if (p.stockQty === 0)
+  if (!p.inStock) {
     return { label: "Out of Stock", color: Colors.error, bg: "#FFF0F3" };
-  if (p.stockQty <= 10)
+  }
+  if (p.stock <= 10) {
     return {
-      label: `Low (${p.stockQty})`,
+      label: `Low (${p.stock})`,
       color: Colors.warning,
       bg: `${Colors.warning}18`,
     };
+  }
+  if (p.fastMoving) {
+    return {
+      label: `${p.stock} units`,
+      color: Colors.info,
+      bg: `${Colors.info}18`,
+    };
+  }
   return {
-    label: `${p.stockQty} units`,
-    color: Colors.info,
-    bg: `${Colors.info}18`,
+    label: `${p.stock} units`,
+    color: Colors.success,
+    bg: `${Colors.success}18`,
   };
 }
 
-function discount(price: number, mrp: number) {
-  if (!mrp || mrp <= price) return null;
-  return Math.round(((mrp - price) / mrp) * 100);
+function getRatingDisplay(rating?: number, reviewCount?: number) {
+  if (!rating) return null;
+  return { rating, reviewCount: reviewCount || 0 };
 }
 
 // ── Shared small components ───────────────────────────────────────────────────
@@ -275,12 +145,14 @@ function ProductImage({
   name,
   size = 56,
 }: {
-  src: string;
+  src?: string;
   name: string;
   size?: number;
 }) {
   const [err, setErr] = useState(false);
-  if (!src || err) {
+  const imageSrc = Array.isArray(src) ? src[0] : src;
+
+  if (!imageSrc || err) {
     return (
       <div
         className="flex items-center justify-center rounded-2xl flex-shrink-0"
@@ -297,12 +169,41 @@ function ProductImage({
   }
   return (
     <img
-      src={src}
+      src={imageSrc}
       alt={name}
       onError={() => setErr(true)}
       className="rounded-2xl object-cover flex-shrink-0"
       style={{ width: size, height: size, background: Colors.surfaceAlt }}
     />
+  );
+}
+
+// ── Tag Badge ─────────────────────────────────────────────────────────────────
+function TagBadge({ tag }: { tag: ProductTag }) {
+  const tagColors: Record<ProductTag, { bg: string; color: string }> = {
+    "Limited Stock": { bg: `${Colors.warning}18`, color: Colors.warning },
+    "Out of Stock": { bg: "#FFF0F3", color: Colors.error },
+    "Fast Moving": { bg: `${Colors.info}18`, color: Colors.info },
+    "New Arrival": { bg: `${Colors.primaryLight}`, color: Colors.primary },
+    "Best Seller": { bg: "#FFF8E1", color: "#F9A825" },
+    "Special Offer": { bg: "#FCE4EC", color: "#E91E63" },
+    Trending: { bg: "#E8EAF6", color: "#5C6BC0" },
+    Premium: { bg: "#FFF3E0", color: "#F57C00" },
+    Organic: { bg: "#E8F5E9", color: "#43A047" },
+    Imported: { bg: "#E3F2FD", color: "#1E88E5" },
+  };
+  const style = tagColors[tag] || {
+    bg: Colors.surfaceAlt,
+    color: Colors.textSecondary,
+  };
+
+  return (
+    <span
+      className="text-xs px-2 py-0.5 rounded-lg font-medium whitespace-nowrap"
+      style={{ background: style.bg, color: style.color }}
+    >
+      {tag}
+    </span>
   );
 }
 
@@ -393,20 +294,32 @@ function EditModal({
   const [focused, setFocused] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const set = (key: keyof Product, val: string | boolean | number) =>
+  const set = (key: keyof Product, val: string | boolean | number | string[]) =>
     setForm((prev) => ({ ...prev, [key]: val }));
 
   const handleSave = async () => {
     if (!form.name.trim()) return;
     setSaving(true);
     await new Promise((r) => setTimeout(r, 900));
-    onSave(form);
+    onSave({
+      ...form,
+      inStock: form.stock > 0,
+      discount:
+        form.originalPrice && form.originalPrice > form.price
+          ? Math.round(
+              ((form.originalPrice - form.price) / form.originalPrice) * 100,
+            )
+          : undefined,
+    });
     setSaving(false);
   };
 
   const inputClass =
     "w-full bg-transparent pl-10 pr-4 py-3 text-sm outline-none";
   const inputStyle = { color: Colors.textPrimary };
+
+  // Get category name from id
+  const categoryOptions = CATEGORIES.filter((c) => c.id !== "all");
 
   return (
     <div
@@ -450,7 +363,11 @@ function EditModal({
         <div className="p-6 flex flex-col gap-4">
           {/* Image preview */}
           <div className="flex items-center gap-4">
-            <ProductImage src={form.imageUrl} name={form.name} size={64} />
+            <ProductImage
+              src={Array.isArray(form.images) ? form.images[0] : form.images}
+              name={form.name}
+              size={64}
+            />
             <div className="flex-1 flex flex-col gap-1.5">
               <FieldLabel>Image URL</FieldLabel>
               <InputBox focused={focused === "img"} icon={Link}>
@@ -458,8 +375,12 @@ function EditModal({
                   className={inputClass}
                   style={inputStyle}
                   placeholder="https://..."
-                  value={form.imageUrl}
-                  onChange={(e) => set("imageUrl", e.target.value)}
+                  value={
+                    Array.isArray(form.images)
+                      ? form.images[0] || ""
+                      : form.images || ""
+                  }
+                  onChange={(e) => set("images", [e.target.value])}
                   onFocus={() => setFocused("img")}
                   onBlur={() => setFocused("")}
                 />
@@ -467,19 +388,34 @@ function EditModal({
             </div>
           </div>
 
-          {/* Name */}
-          <div className="flex flex-col gap-1.5">
-            <FieldLabel>Product Name *</FieldLabel>
-            <InputBox focused={focused === "name"} icon={Tag}>
-              <input
-                className={inputClass}
-                style={inputStyle}
-                value={form.name}
-                onChange={(e) => set("name", e.target.value)}
-                onFocus={() => setFocused("name")}
-                onBlur={() => setFocused("")}
-              />
-            </InputBox>
+          {/* Name + Brand */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1.5">
+              <FieldLabel>Product Name *</FieldLabel>
+              <InputBox focused={focused === "name"} icon={Tag}>
+                <input
+                  className={inputClass}
+                  style={inputStyle}
+                  value={form.name}
+                  onChange={(e) => set("name", e.target.value)}
+                  onFocus={() => setFocused("name")}
+                  onBlur={() => setFocused("")}
+                />
+              </InputBox>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <FieldLabel>Brand</FieldLabel>
+              <InputBox focused={focused === "brand"} icon={Award}>
+                <input
+                  className={inputClass}
+                  style={inputStyle}
+                  value={form.brand || ""}
+                  onChange={(e) => set("brand", e.target.value)}
+                  onFocus={() => setFocused("brand")}
+                  onBlur={() => setFocused("")}
+                />
+              </InputBox>
+            </div>
           </div>
 
           {/* Category + Unit */}
@@ -495,8 +431,10 @@ function EditModal({
                   onFocus={() => setFocused("cat")}
                   onBlur={() => setFocused("")}
                 >
-                  {CATEGORIES.filter((c) => c !== "All").map((c) => (
-                    <option key={c}>{c}</option>
+                  {categoryOptions.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.icon} {c.name}
+                    </option>
                   ))}
                 </select>
                 <div
@@ -510,29 +448,19 @@ function EditModal({
             <div className="flex flex-col gap-1.5">
               <FieldLabel>Unit</FieldLabel>
               <InputBox focused={focused === "unit"} icon={PackagePlus}>
-                <select
-                  className="w-full bg-transparent pl-10 pr-8 py-3 text-sm outline-none appearance-none cursor-pointer"
-                  style={{ color: Colors.textPrimary }}
+                <input
+                  className={inputClass}
+                  style={inputStyle}
                   value={form.unit}
                   onChange={(e) => set("unit", e.target.value)}
                   onFocus={() => setFocused("unit")}
                   onBlur={() => setFocused("")}
-                >
-                  {UNITS.map((u) => (
-                    <option key={u}>{u}</option>
-                  ))}
-                </select>
-                <div
-                  className="absolute right-3 pointer-events-none"
-                  style={{ color: Colors.textMuted }}
-                >
-                  <ChevronDown size={15} />
-                </div>
+                />
               </InputBox>
             </div>
           </div>
 
-          {/* Price + MRP */}
+          {/* Price + Original Price */}
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <FieldLabel>Selling Price (₹)</FieldLabel>
@@ -550,20 +478,92 @@ function EditModal({
               </InputBox>
             </div>
             <div className="flex flex-col gap-1.5">
-              <FieldLabel>MRP (₹)</FieldLabel>
-              <InputBox focused={focused === "mrp"} icon={IndianRupee}>
+              <FieldLabel>Original Price (₹)</FieldLabel>
+              <InputBox
+                focused={focused === "originalPrice"}
+                icon={IndianRupee}
+              >
                 <input
                   className={inputClass}
                   style={inputStyle}
                   type="number"
                   min="0"
-                  value={form.mrp}
-                  onChange={(e) => set("mrp", Number(e.target.value))}
-                  onFocus={() => setFocused("mrp")}
+                  value={form.originalPrice || ""}
+                  onChange={(e) =>
+                    set(
+                      "originalPrice",
+                      e.target.value === "" ? "" : Number(e.target.value),
+                    )
+                  }
+                  onFocus={() => setFocused("originalPrice")}
                   onBlur={() => setFocused("")}
                 />
               </InputBox>
             </div>
+          </div>
+
+          {/* Stock + Min Order Qty */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1.5">
+              <FieldLabel>Stock Quantity</FieldLabel>
+              <InputBox focused={focused === "stock"} icon={Boxes}>
+                <input
+                  className={inputClass}
+                  style={inputStyle}
+                  type="number"
+                  min="0"
+                  value={form.stock}
+                  onChange={(e) => {
+                    const val = Number(e.target.value);
+                    set("stock", val);
+                    set("inStock", val > 0);
+                  }}
+                  onFocus={() => setFocused("stock")}
+                  onBlur={() => setFocused("")}
+                />
+              </InputBox>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <FieldLabel>Min Order Qty</FieldLabel>
+              <InputBox focused={focused === "minOrderQty"} icon={Boxes}>
+                <input
+                  className={inputClass}
+                  style={inputStyle}
+                  type="number"
+                  min="1"
+                  value={form.minOrderQty || 1}
+                  onChange={(e) =>
+                    set(
+                      "minOrderQty",
+                      e.target.value === "" ? "" : Number(e.target.value),
+                    )
+                  }
+                  onFocus={() => setFocused("minOrderQty")}
+                  onBlur={() => setFocused("")}
+                />
+              </InputBox>
+            </div>
+          </div>
+
+          {/* Weight */}
+          <div className="flex flex-col gap-1.5">
+            <FieldLabel>Weight / Size</FieldLabel>
+            <InputBox focused={focused === "weight"} icon={Boxes}>
+              <input
+                className={inputClass}
+                style={inputStyle}
+                placeholder="e.g. 5kg, 500ml"
+                value={form.weight || ""}
+                onChange={(e) =>
+                  set(
+                    "weight",
+                    e.target.value === "" ? "" : Number(e.target.value),
+                  )
+                }
+                onFocus={() => setFocused("weight")}
+                onBlur={() => setFocused("")}
+              />
+            </InputBox>
           </div>
 
           {/* Description */}
@@ -597,57 +597,80 @@ function EditModal({
             </div>
           </div>
 
-          {/* Stock Toggle */}
-          <div
-            className="flex items-center justify-between px-4 py-3.5 rounded-2xl"
-            style={{
-              background: Colors.surfaceAlt,
-              border: `1.5px solid ${Colors.border}`,
-            }}
-          >
-            <div>
-              <p
-                className="text-sm font-semibold"
-                style={{ color: Colors.textPrimary }}
-              >
-                Limit Stock Orders
-              </p>
-              <p className="text-xs" style={{ color: Colors.textMuted }}>
-                Orders stop when stock reaches zero
-              </p>
-            </div>
-            <button
-              onClick={() => set("stockLimited", !form.stockLimited)}
+          {/* Toggles */}
+          <div className="flex flex-col gap-3">
+            {/* Fast Moving */}
+            <div
+              className="flex items-center justify-between px-4 py-3 rounded-2xl"
               style={{
-                color: form.stockLimited ? Colors.primary : Colors.textMuted,
+                background: Colors.surfaceAlt,
+                border: `1.5px solid ${Colors.border}`,
               }}
             >
-              {form.stockLimited ? (
-                <ToggleRight size={34} strokeWidth={1.5} />
-              ) : (
-                <ToggleLeft size={34} strokeWidth={1.5} />
-              )}
-            </button>
-          </div>
-
-          {/* Stock Qty */}
-          {form.stockLimited && (
-            <div className="flex flex-col gap-1.5">
-              <FieldLabel>Stock Quantity</FieldLabel>
-              <InputBox focused={focused === "qty"} icon={Boxes}>
-                <input
-                  className={inputClass}
-                  style={inputStyle}
-                  type="number"
-                  min="0"
-                  value={form.stockQty}
-                  onChange={(e) => set("stockQty", Number(e.target.value))}
-                  onFocus={() => setFocused("qty")}
-                  onBlur={() => setFocused("")}
-                />
-              </InputBox>
+              <div className="flex items-center gap-2">
+                <TrendingUp size={18} color={Colors.primary} />
+                <div>
+                  <p
+                    className="text-sm font-semibold"
+                    style={{ color: Colors.textPrimary }}
+                  >
+                    Fast Moving
+                  </p>
+                  <p className="text-xs" style={{ color: Colors.textMuted }}>
+                    Highlight as frequently purchased
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => set("fastMoving", !form.fastMoving)}
+                style={{
+                  color: form.fastMoving ? Colors.primary : Colors.textMuted,
+                }}
+              >
+                {form.fastMoving ? (
+                  <ToggleRight size={34} strokeWidth={1.5} />
+                ) : (
+                  <ToggleLeft size={34} strokeWidth={1.5} />
+                )}
+              </button>
             </div>
-          )}
+
+            {/* Featured */}
+            <div
+              className="flex items-center justify-between px-4 py-3 rounded-2xl"
+              style={{
+                background: Colors.surfaceAlt,
+                border: `1.5px solid ${Colors.border}`,
+              }}
+            >
+              <div className="flex items-center gap-2">
+                <Star size={18} color={Colors.warning} />
+                <div>
+                  <p
+                    className="text-sm font-semibold"
+                    style={{ color: Colors.textPrimary }}
+                  >
+                    Featured
+                  </p>
+                  <p className="text-xs" style={{ color: Colors.textMuted }}>
+                    Show on homepage
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => set("featured", !form.featured)}
+                style={{
+                  color: form.featured ? Colors.primary : Colors.textMuted,
+                }}
+              >
+                {form.featured ? (
+                  <ToggleRight size={34} strokeWidth={1.5} />
+                ) : (
+                  <ToggleLeft size={34} strokeWidth={1.5} />
+                )}
+              </button>
+            </div>
+          </div>
 
           {/* Actions */}
           <div className="flex gap-3 pt-2">
@@ -715,12 +738,13 @@ function EditModal({
 //  MAIN COMPONENT
 // ══════════════════════════════════════════════════════════════════════════════
 export default function ViewProducts() {
-  const [products, setProducts] = useState<Product[]>(MOCK_PRODUCTS);
+  const [products, setProducts] = useState<Product[]>(PRODUCTS);
   const [view, setView] = useState<"grid" | "table">("grid");
   const [search, setSearch] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
-  const [categoryFilter, setCategoryFilter] = useState("All");
+  const [categoryFilter, setCategoryFilter] = useState("all");
   const [stockFilter, setStockFilter] = useState("All");
+  const [tagFilter, setTagFilter] = useState("All");
   const [editProduct, setEditProduct] = useState<Product | null>(null);
   const [deleteProduct, setDeleteProduct] = useState<Product | null>(null);
   const [toast, setToast] = useState<{
@@ -737,33 +761,46 @@ export default function ViewProducts() {
     return products.filter((p) => {
       const matchSearch =
         p.name.toLowerCase().includes(search.toLowerCase()) ||
-        p.category.toLowerCase().includes(search.toLowerCase());
+        p.category.toLowerCase().includes(search.toLowerCase()) ||
+        p.brand?.toLowerCase().includes(search.toLowerCase()) ||
+        p.description.toLowerCase().includes(search.toLowerCase());
+
       const matchCat =
-        categoryFilter === "All" || p.category === categoryFilter;
+        categoryFilter === "all" || p.category === categoryFilter;
+
       const matchStock =
         stockFilter === "All" ||
-        (stockFilter === "In Stock" && (!p.stockLimited || p.stockQty > 0)) ||
-        (stockFilter === "Out of Stock" &&
-          p.stockLimited &&
-          p.stockQty === 0) ||
-        (stockFilter === "Low Stock" &&
-          p.stockLimited &&
-          p.stockQty > 0 &&
-          p.stockQty <= 10);
-      return matchSearch && matchCat && matchStock;
-    });
-  }, [products, search, categoryFilter, stockFilter]);
+        (stockFilter === "In Stock" && p.inStock) ||
+        (stockFilter === "Out of Stock" && !p.inStock) ||
+        (stockFilter === "Low Stock" && p.inStock && p.stock <= 10) ||
+        (stockFilter === "Fast Moving" && p.fastMoving);
 
-  const handleStockToggle = (id: string) => {
+      const matchTag =
+        tagFilter === "All" || p.tags.includes(tagFilter as ProductTag);
+
+      return matchSearch && matchCat && matchStock && matchTag;
+    });
+  }, [products, search, categoryFilter, stockFilter, tagFilter]);
+
+  const handleFastMovingToggle = (id: string) => {
     setProducts((prev) =>
-      prev.map((p) =>
-        p.id === id ? { ...p, stockLimited: !p.stockLimited } : p,
-      ),
+      prev.map((p) => (p.id === id ? { ...p, fastMoving: !p.fastMoving } : p)),
     );
     const p = products.find((p) => p.id === id)!;
     showToast(
       "success",
-      `"${p.name}" stock ${p.stockLimited ? "set to unlimited" : "set to limited"}`,
+      `"${p.name}" ${p.fastMoving ? "removed from" : "marked as"} fast moving`,
+    );
+  };
+
+  const handleFeaturedToggle = (id: string) => {
+    setProducts((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, featured: !p.featured } : p)),
+    );
+    const p = products.find((p) => p.id === id)!;
+    showToast(
+      "success",
+      `"${p.name}" ${p.featured ? "removed from" : "marked as"} featured`,
     );
   };
 
@@ -782,13 +819,17 @@ export default function ViewProducts() {
 
   // Stats
   const totalProducts = products.length;
-  const outOfStock = products.filter(
-    (p) => p.stockLimited && p.stockQty === 0,
-  ).length;
-  const lowStock = products.filter(
-    (p) => p.stockLimited && p.stockQty > 0 && p.stockQty <= 10,
-  ).length;
-  const unlimited = products.filter((p) => !p.stockLimited).length;
+  const outOfStock = products.filter((p) => !p.inStock).length;
+  const lowStock = products.filter((p) => p.inStock && p.stock <= 10).length;
+  const fastMoving = products.filter((p) => p.fastMoving).length;
+  const featured = products.filter((p) => p.featured).length;
+
+  // Get unique tags from all products for filter
+  const allTags = useMemo(() => {
+    const tags = new Set<ProductTag>();
+    products.forEach((p) => p.tags.forEach((t) => tags.add(t)));
+    return ["All", ...Array.from(tags)];
+  }, [products]);
 
   return (
     <>
@@ -865,33 +906,44 @@ export default function ViewProducts() {
         </div>
 
         {/* ── Stats Row ── */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
           {[
             {
               label: "Total Products",
               value: totalProducts,
               color: Colors.primary,
               bg: Colors.primaryLight,
+              icon: Package,
             },
             {
-              label: "Unlimited Stock",
-              value: unlimited,
-              color: Colors.success,
-              bg: `${Colors.success}18`,
+              label: "Fast Moving",
+              value: fastMoving,
+              color: Colors.info,
+              bg: `${Colors.info}18`,
+              icon: TrendingUp,
+            },
+            {
+              label: "Featured",
+              value: featured,
+              color: Colors.warning,
+              bg: `${Colors.warning}18`,
+              icon: Star,
             },
             {
               label: "Low Stock",
               value: lowStock,
               color: Colors.warning,
               bg: `${Colors.warning}18`,
+              icon: AlertTriangle,
             },
             {
               label: "Out of Stock",
               value: outOfStock,
               color: Colors.error,
               bg: "#FFF0F3",
+              icon: X,
             },
-          ].map(({ label, value, color, bg }) => (
+          ].map(({ label, value, color, bg, icon: Icon }) => (
             <div
               key={label}
               className="rounded-2xl px-4 py-3.5 flex items-center gap-3"
@@ -905,7 +957,7 @@ export default function ViewProducts() {
                 className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
                 style={{ background: bg }}
               >
-                <Package size={18} color={color} strokeWidth={2} />
+                <Icon size={18} color={color} strokeWidth={2} />
               </div>
               <div>
                 <p
@@ -971,8 +1023,11 @@ export default function ViewProducts() {
                 minWidth: 160,
               }}
             >
-              {CATEGORIES.map((c) => (
-                <option key={c}>{c}</option>
+              <option value="all">All Categories</option>
+              {CATEGORIES.filter((c) => c.id !== "all").map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.icon} {c.name}
+                </option>
               ))}
             </select>
             <ChevronDown
@@ -1001,8 +1056,44 @@ export default function ViewProducts() {
                 minWidth: 150,
               }}
             >
-              {["All", "In Stock", "Out of Stock", "Low Stock"].map((s) => (
+              {[
+                "All",
+                "In Stock",
+                "Out of Stock",
+                "Low Stock",
+                "Fast Moving",
+              ].map((s) => (
                 <option key={s}>{s}</option>
+              ))}
+            </select>
+            <ChevronDown
+              size={14}
+              color={Colors.textMuted}
+              className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none"
+            />
+          </div>
+
+          {/* Tag filter */}
+          <div className="relative">
+            <Tag
+              size={15}
+              color={Colors.textMuted}
+              className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"
+              strokeWidth={2}
+            />
+            <select
+              value={tagFilter}
+              onChange={(e) => setTagFilter(e.target.value)}
+              className="pl-9 pr-8 py-2.5 rounded-2xl text-sm outline-none appearance-none cursor-pointer"
+              style={{
+                background: Colors.surface,
+                border: `1.5px solid ${Colors.border}`,
+                color: Colors.textSecondary,
+                minWidth: 140,
+              }}
+            >
+              {allTags.map((t) => (
+                <option key={t}>{t}</option>
               ))}
             </select>
             <ChevronDown
@@ -1014,7 +1105,10 @@ export default function ViewProducts() {
         </div>
 
         {/* ── Results count ── */}
-        {(search || categoryFilter !== "All" || stockFilter !== "All") && (
+        {(search ||
+          categoryFilter !== "all" ||
+          stockFilter !== "All" ||
+          tagFilter !== "All") && (
           <p className="text-xs" style={{ color: Colors.textMuted }}>
             Showing{" "}
             <span
@@ -1038,7 +1132,10 @@ export default function ViewProducts() {
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                 {filtered.map((product) => {
                   const stock = stockStatus(product);
-                  const disc = discount(product.price, product.mrp);
+                  const ratingInfo = getRatingDisplay(
+                    product.rating,
+                    product.reviewCount,
+                  );
                   return (
                     <div
                       key={product.id}
@@ -1064,30 +1161,19 @@ export default function ViewProducts() {
                       {/* Image */}
                       <div
                         className="relative"
-                        style={{ height: 160, background: Colors.surfaceAlt }}
+                        style={{
+                          height: 160,
+                          width: "100%",
+                          background: Colors.surfaceAlt,
+                        }}
                       >
-                        {product.imageUrl ? (
-                          <img
-                            src={product.imageUrl}
-                            alt={product.name}
-                            className="w-full h-full object-cover"
-                            onError={(e) => {
-                              (
-                                e.currentTarget as HTMLImageElement
-                              ).style.display = "none";
-                            }}
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <ImageOff
-                              size={36}
-                              color={Colors.border}
-                              strokeWidth={1.5}
-                            />
-                          </div>
-                        )}
+                        <ProductImage
+                          src={product.images[0]}
+                          name={product.name}
+                          size={160}
+                        />
                         {/* Discount badge */}
-                        {disc && (
+                        {product.discount && (
                           <div
                             className="absolute top-3 left-3 px-2 py-0.5 rounded-lg text-xs font-bold"
                             style={{
@@ -1095,7 +1181,7 @@ export default function ViewProducts() {
                               color: Colors.white,
                             }}
                           >
-                            -{disc}%
+                            -{product.discount}%
                           </div>
                         )}
                         {/* Stock badge */}
@@ -1105,11 +1191,24 @@ export default function ViewProducts() {
                         >
                           {stock.label}
                         </div>
+                        {/* Fast Moving badge */}
+                        {product.fastMoving && (
+                          <div
+                            className="absolute bottom-3 left-3"
+                            style={{ color: Colors.info }}
+                          >
+                            <Flame
+                              size={18}
+                              fill={Colors.info}
+                              strokeWidth={1.5}
+                            />
+                          </div>
+                        )}
                       </div>
 
                       {/* Content */}
                       <div className="p-4 flex flex-col gap-2 flex-1">
-                        <div>
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           <span
                             className="text-xs font-medium px-2 py-0.5 rounded-lg"
                             style={{
@@ -1117,15 +1216,37 @@ export default function ViewProducts() {
                               color: Colors.primary,
                             }}
                           >
-                            {product.category}
+                            {CATEGORIES.find((c) => c.id === product.category)
+                              ?.name || product.category}
                           </span>
+                          {product.featured && (
+                            <span
+                              className="text-xs px-2 py-0.5 rounded-lg flex items-center gap-0.5"
+                              style={{
+                                background: `${Colors.warning}18`,
+                                color: Colors.warning,
+                              }}
+                            >
+                              <Star size={10} /> Featured
+                            </span>
+                          )}
                         </div>
-                        <p
-                          className="text-sm font-bold leading-snug"
-                          style={{ color: Colors.textPrimary }}
-                        >
-                          {product.name}
-                        </p>
+                        <div>
+                          <p
+                            className="text-sm font-bold leading-snug"
+                            style={{ color: Colors.textPrimary }}
+                          >
+                            {product.name}
+                          </p>
+                          {product.brand && (
+                            <p
+                              className="text-xs mt-0.5"
+                              style={{ color: Colors.textMuted }}
+                            >
+                              {product.brand}
+                            </p>
+                          )}
+                        </div>
                         {product.description && (
                           <p
                             className="text-xs line-clamp-2 leading-relaxed"
@@ -1134,6 +1255,43 @@ export default function ViewProducts() {
                             {product.description}
                           </p>
                         )}
+                        {/* Tags */}
+                        {product.tags.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {product.tags.slice(0, 2).map((tag) => (
+                              <TagBadge key={tag} tag={tag} />
+                            ))}
+                            {product.tags.length > 2 && (
+                              <span
+                                className="text-xs px-2 py-0.5 rounded-lg"
+                                style={{
+                                  background: Colors.surfaceAlt,
+                                  color: Colors.textMuted,
+                                }}
+                              >
+                                +{product.tags.length - 2}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                        {/* Rating */}
+                        {ratingInfo && (
+                          <div className="flex items-center gap-1 mt-1">
+                            <Star size={12} fill="#F9A825" color="#F9A825" />
+                            <span
+                              className="text-xs font-semibold"
+                              style={{ color: Colors.textPrimary }}
+                            >
+                              {ratingInfo.rating}
+                            </span>
+                            <span
+                              className="text-xs"
+                              style={{ color: Colors.textMuted }}
+                            >
+                              ({ratingInfo.reviewCount})
+                            </span>
+                          </div>
+                        )}
                         <div className="flex items-baseline gap-2 mt-auto pt-1">
                           <p
                             className="text-base font-bold"
@@ -1141,14 +1299,15 @@ export default function ViewProducts() {
                           >
                             ₹{product.price}
                           </p>
-                          {product.mrp > product.price && (
-                            <p
-                              className="text-xs line-through"
-                              style={{ color: Colors.textMuted }}
-                            >
-                              ₹{product.mrp}
-                            </p>
-                          )}
+                          {product.originalPrice &&
+                            product.originalPrice > product.price && (
+                              <p
+                                className="text-xs line-through"
+                                style={{ color: Colors.textMuted }}
+                              >
+                                ₹{product.originalPrice}
+                              </p>
+                            )}
                           <p
                             className="text-xs ml-auto"
                             style={{ color: Colors.textMuted }}
@@ -1156,36 +1315,56 @@ export default function ViewProducts() {
                             / {product.unit}
                           </p>
                         </div>
+                        {product.weight && (
+                          <p
+                            className="text-xs"
+                            style={{ color: Colors.textMuted }}
+                          >
+                            {product.weight}
+                          </p>
+                        )}
                       </div>
 
                       {/* Actions */}
                       <div
-                        className="px-4 pb-4 flex items-center gap-2"
+                        className="px-4 pb-4 flex items-center gap-2 flex-wrap"
                         style={{
                           borderTop: `1px solid ${Colors.divider}`,
                           paddingTop: 12,
                         }}
                       >
-                        {/* Stock toggle */}
+                        {/* Fast Moving toggle */}
                         <button
-                          onClick={() => handleStockToggle(product.id)}
-                          className="flex items-center gap-1.5 flex-1 justify-center py-2 rounded-xl text-xs font-semibold transition-all duration-150"
+                          onClick={() => handleFastMovingToggle(product.id)}
+                          className="flex items-center gap-1.5 px-2.5 py-2 rounded-xl text-xs font-semibold transition-all duration-150"
                           style={{
-                            background: product.stockLimited
-                              ? `${Colors.primary}18`
+                            background: product.fastMoving
+                              ? `${Colors.info}18`
                               : Colors.surfaceAlt,
-                            color: product.stockLimited
-                              ? Colors.primary
+                            color: product.fastMoving
+                              ? Colors.info
                               : Colors.textSecondary,
-                            border: `1px solid ${product.stockLimited ? Colors.primary + "40" : Colors.border}`,
+                            border: `1px solid ${product.fastMoving ? Colors.info + "40" : Colors.border}`,
                           }}
                         >
-                          {product.stockLimited ? (
-                            <ToggleRight size={16} strokeWidth={2} />
-                          ) : (
-                            <ToggleLeft size={16} strokeWidth={2} />
-                          )}
-                          {product.stockLimited ? "Limited" : "Unlimited"}
+                          <Flame size={14} /> FM
+                        </button>
+
+                        {/* Featured toggle */}
+                        <button
+                          onClick={() => handleFeaturedToggle(product.id)}
+                          className="flex items-center gap-1.5 px-2.5 py-2 rounded-xl text-xs font-semibold transition-all duration-150"
+                          style={{
+                            background: product.featured
+                              ? `${Colors.warning}18`
+                              : Colors.surfaceAlt,
+                            color: product.featured
+                              ? Colors.warning
+                              : Colors.textSecondary,
+                            border: `1px solid ${product.featured ? Colors.warning + "40" : Colors.border}`,
+                          }}
+                        >
+                          <Star size={14} />
                         </button>
 
                         {/* Edit */}
@@ -1259,18 +1438,20 @@ export default function ViewProducts() {
             }}
           >
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[800px]">
+              <table className="w-full min-w-[1000px]">
                 <thead>
                   <tr style={{ background: Colors.surfaceAlt }}>
                     {[
                       "#",
                       "Product",
+                      "Brand",
                       "Category",
                       "Price",
-                      "MRP",
-                      "Unit",
-                      "Stock Status",
-                      "Limit Orders",
+                      "Stock",
+                      "Tags",
+                      "Rating",
+                      "Fast Moving",
+                      "Featured",
                       "Actions",
                     ].map((h) => (
                       <th
@@ -1286,13 +1467,17 @@ export default function ViewProducts() {
                 <tbody>
                   {filtered.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="py-16 text-center">
+                      <td colSpan={11} className="py-16 text-center">
                         <EmptyState inline />
                       </td>
                     </tr>
                   ) : (
                     filtered.map((product, idx) => {
                       const stock = stockStatus(product);
+                      const ratingInfo = getRatingDisplay(
+                        product.rating,
+                        product.reviewCount,
+                      );
                       return (
                         <tr
                           key={product.id}
@@ -1321,7 +1506,7 @@ export default function ViewProducts() {
                           <td className="px-5 py-3.5">
                             <div className="flex items-center gap-3">
                               <ProductImage
-                                src={product.imageUrl}
+                                src={product.images[0]}
                                 name={product.name}
                                 size={40}
                               />
@@ -1334,7 +1519,7 @@ export default function ViewProducts() {
                                 </p>
                                 {product.description && (
                                   <p
-                                    className="text-xs line-clamp-1 max-w-[160px]"
+                                    className="text-xs line-clamp-1 max-w-[200px]"
                                     style={{ color: Colors.textMuted }}
                                   >
                                     {product.description}
@@ -1344,6 +1529,14 @@ export default function ViewProducts() {
                             </div>
                           </td>
                           <td className="px-5 py-3.5">
+                            <p
+                              className="text-sm"
+                              style={{ color: Colors.textSecondary }}
+                            >
+                              {product.brand || "—"}
+                            </p>
+                          </td>
+                          <td className="px-5 py-3.5">
                             <span
                               className="text-xs font-medium px-2 py-0.5 rounded-lg whitespace-nowrap"
                               style={{
@@ -1351,32 +1544,28 @@ export default function ViewProducts() {
                                 color: Colors.primary,
                               }}
                             >
-                              {product.category}
+                              {CATEGORIES.find((c) => c.id === product.category)
+                                ?.name || product.category}
                             </span>
                           </td>
                           <td className="px-5 py-3.5">
-                            <p
-                              className="text-sm font-bold"
-                              style={{ color: Colors.primary }}
-                            >
-                              ₹{product.price}
-                            </p>
-                          </td>
-                          <td className="px-5 py-3.5">
-                            <p
-                              className="text-sm line-through"
-                              style={{ color: Colors.textMuted }}
-                            >
-                              ₹{product.mrp}
-                            </p>
-                          </td>
-                          <td className="px-5 py-3.5">
-                            <p
-                              className="text-sm"
-                              style={{ color: Colors.textSecondary }}
-                            >
-                              {product.unit}
-                            </p>
+                            <div>
+                              <p
+                                className="text-sm font-bold"
+                                style={{ color: Colors.primary }}
+                              >
+                                ₹{product.price}
+                              </p>
+                              {product.originalPrice &&
+                                product.originalPrice > product.price && (
+                                  <p
+                                    className="text-xs line-through"
+                                    style={{ color: Colors.textMuted }}
+                                  >
+                                    ₹{product.originalPrice}
+                                  </p>
+                                )}
+                            </div>
                           </td>
                           <td className="px-5 py-3.5">
                             <span
@@ -1390,15 +1579,73 @@ export default function ViewProducts() {
                             </span>
                           </td>
                           <td className="px-5 py-3.5">
+                            <div className="flex flex-wrap gap-1 max-w-[150px]">
+                              {product.tags.slice(0, 2).map((tag) => (
+                                <TagBadge key={tag} tag={tag} />
+                              ))}
+                              {product.tags.length > 2 && (
+                                <span
+                                  className="text-xs px-2 py-0.5 rounded-lg"
+                                  style={{
+                                    background: Colors.surfaceAlt,
+                                    color: Colors.textMuted,
+                                  }}
+                                >
+                                  +{product.tags.length - 2}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-5 py-3.5">
+                            {ratingInfo ? (
+                              <div className="flex items-center gap-1">
+                                <Star
+                                  size={12}
+                                  fill="#F9A825"
+                                  color="#F9A825"
+                                />
+                                <span
+                                  className="text-sm font-semibold"
+                                  style={{ color: Colors.textPrimary }}
+                                >
+                                  {ratingInfo.rating}
+                                </span>
+                              </div>
+                            ) : (
+                              <span
+                                className="text-xs"
+                                style={{ color: Colors.textMuted }}
+                              >
+                                —
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-5 py-3.5">
                             <button
-                              onClick={() => handleStockToggle(product.id)}
+                              onClick={() => handleFastMovingToggle(product.id)}
                               style={{
-                                color: product.stockLimited
-                                  ? Colors.primary
+                                color: product.fastMoving
+                                  ? Colors.info
                                   : Colors.textMuted,
                               }}
                             >
-                              {product.stockLimited ? (
+                              {product.fastMoving ? (
+                                <ToggleRight size={30} strokeWidth={1.5} />
+                              ) : (
+                                <ToggleLeft size={30} strokeWidth={1.5} />
+                              )}
+                            </button>
+                          </td>
+                          <td className="px-5 py-3.5">
+                            <button
+                              onClick={() => handleFeaturedToggle(product.id)}
+                              style={{
+                                color: product.featured
+                                  ? Colors.warning
+                                  : Colors.textMuted,
+                              }}
+                            >
+                              {product.featured ? (
                                 <ToggleRight size={30} strokeWidth={1.5} />
                               ) : (
                                 <ToggleLeft size={30} strokeWidth={1.5} />
