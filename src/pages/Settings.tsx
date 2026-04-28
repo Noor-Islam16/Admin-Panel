@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Settings,
   MessageCircle,
@@ -22,11 +22,12 @@ import {
   RefreshCw,
 } from "lucide-react";
 import Colors from "../constants/colors";
+import { AdminAPI } from "../config/api";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface WhatsAppRecipient {
   id: string;
-  label: string; // "Delivery Team", "Accounts", etc.
+  label: string;
   number: string;
   isGroup: boolean;
   active: boolean;
@@ -93,7 +94,6 @@ function SectionCard({
         boxShadow: `0 4px 16px ${Colors.shadow}`,
       }}
     >
-      {/* Header */}
       <div
         className="flex items-center gap-3 px-6 py-5"
         style={{
@@ -110,10 +110,7 @@ function SectionCard({
           <Icon size={20} color={Colors.white} strokeWidth={1.8} />
         </div>
         <div>
-          <p
-            className="text-sm font-bold"
-            style={{ color: Colors.textPrimary }}
-          >
+          <p className="text-sm font-bold" style={{ color: Colors.textPrimary }}>
             {title}
           </p>
           <p className="text-xs" style={{ color: Colors.textMuted }}>
@@ -127,13 +124,7 @@ function SectionCard({
 }
 
 // ── Field Row ─────────────────────────────────────────────────────────────────
-function FieldRow({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
+function FieldRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-1.5">
       <label
@@ -225,10 +216,7 @@ function ToggleRow({
       }}
     >
       <div>
-        <p
-          className="text-sm font-semibold"
-          style={{ color: Colors.textPrimary }}
-        >
+        <p className="text-sm font-semibold" style={{ color: Colors.textPrimary }}>
           {label}
         </p>
         <p className="text-xs mt-0.5" style={{ color: Colors.textMuted }}>
@@ -237,11 +225,7 @@ function ToggleRow({
       </div>
       <button
         onClick={() => onChange(!value)}
-        style={{
-          color: value ? Colors.primary : Colors.textMuted,
-          flexShrink: 0,
-          marginLeft: 12,
-        }}
+        style={{ color: value ? Colors.primary : Colors.textMuted, flexShrink: 0, marginLeft: 12 }}
       >
         {value ? (
           <ToggleRight size={34} strokeWidth={1.5} />
@@ -277,26 +261,9 @@ function SaveBtn({
       }}
     >
       {loading ? (
-        <svg
-          className="animate-spin"
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="none"
-        >
-          <circle
-            cx="12"
-            cy="12"
-            r="10"
-            stroke="rgba(255,255,255,0.3)"
-            strokeWidth="3"
-          />
-          <path
-            d="M12 2a10 10 0 0 1 10 10"
-            stroke="white"
-            strokeWidth="3"
-            strokeLinecap="round"
-          />
+        <svg className="animate-spin" width="16" height="16" viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.3)" strokeWidth="3" />
+          <path d="M12 2a10 10 0 0 1 10 10" stroke="white" strokeWidth="3" strokeLinecap="round" />
         </svg>
       ) : (
         <Save size={16} strokeWidth={2} />
@@ -310,10 +277,7 @@ function SaveBtn({
 //  MAIN COMPONENT
 // ══════════════════════════════════════════════════════════════════════════════
 export default function SettingsPage() {
-  const [toast, setToast] = useState<{
-    type: "success" | "error";
-    message: string;
-  } | null>(null);
+  const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [loading, setLoading] = useState<Record<string, boolean>>({});
   const [focused, setFocused] = useState("");
   const [showOldPass, setShowOldPass] = useState(false);
@@ -327,6 +291,7 @@ export default function SettingsPage() {
     setTimeout(() => setToast(null), 3200);
   };
 
+  // Generic mock save (still used for WhatsApp / templates until you add those endpoints)
   const save = async (key: string, msg: string) => {
     setLoading((prev) => ({ ...prev, [key]: true }));
     await new Promise((r) => setTimeout(r, 900));
@@ -334,45 +299,13 @@ export default function SettingsPage() {
     showToast("success", msg);
   };
 
-  // ── Store Info ─────────────────────────────────────────────────────────────
-  //   const [store, setStore] = useState({
-  //     name: "Nilkanth Medical Store",
-  //     phone: "+91 98765 43210",
-  //     email: "nilkanth@medstore.com",
-  //     address: "Shop No. 4, Ramnagar Society, Ahmedabad, Gujarat 380015",
-  //     website: "",
-  //     logoUrl: "",
-  //   });
-
   // ── WhatsApp Config ────────────────────────────────────────────────────────
   const [waRecipients, setWaRecipients] = useState<WhatsAppRecipient[]>([
-    {
-      id: "1",
-      label: "Delivery Team",
-      number: "9876543210",
-      isGroup: false,
-      active: true,
-    },
-    {
-      id: "2",
-      label: "Accounts",
-      number: "9876500000",
-      isGroup: false,
-      active: true,
-    },
-    {
-      id: "3",
-      label: "Internal Group",
-      number: "120363xxxxxx@g.us",
-      isGroup: true,
-      active: false,
-    },
+    { id: "1", label: "Delivery Team", number: "9876543210", isGroup: false, active: true },
+    { id: "2", label: "Accounts", number: "9876500000", isGroup: false, active: true },
+    { id: "3", label: "Internal Group", number: "120363xxxxxx@g.us", isGroup: true, active: false },
   ]);
-  const [newRecipient, setNewRecipient] = useState({
-    label: "",
-    number: "",
-    isGroup: false,
-  });
+  const [newRecipient, setNewRecipient] = useState({ label: "", number: "", isGroup: false });
   const [showAddRecipient, setShowAddRecipient] = useState(false);
   const [waSettings, setWaSettings] = useState({
     sendOnOrderPlaced: true,
@@ -387,15 +320,13 @@ export default function SettingsPage() {
     {
       id: "1",
       event: "New Order Placed",
-      message:
-        "🛍️ New order {{orderNo}} from {{customerName}} for ₹{{total}}. Review now.",
+      message: "🛍️ New order {{orderNo}} from {{customerName}} for ₹{{total}}. Review now.",
       active: true,
     },
     {
       id: "2",
       event: "Order Dispatched",
-      message:
-        "🚚 Order {{orderNo}} dispatched to {{customerName}}. Delivery in progress.",
+      message: "🚚 Order {{orderNo}} dispatched to {{customerName}}. Delivery in progress.",
       active: true,
     },
     {
@@ -407,15 +338,13 @@ export default function SettingsPage() {
     {
       id: "4",
       event: "Low Stock Alert",
-      message:
-        "⚠️ {{productName}} is running low ({{qty}} units left). Restock soon.",
+      message: "⚠️ {{productName}} is running low ({{qty}} units left). Restock soon.",
       active: false,
     },
     {
       id: "5",
       event: "Out of Stock",
-      message:
-        "❌ {{productName}} is now OUT OF STOCK. Orders will be blocked.",
+      message: "❌ {{productName}} is now OUT OF STOCK. Orders will be blocked.",
       active: true,
     },
   ]);
@@ -423,13 +352,31 @@ export default function SettingsPage() {
   const [templateDraft, setTemplateDraft] = useState("");
 
   // ── Admin Credentials ──────────────────────────────────────────────────────
-  const [credentials, setCredentials] = useState({
-    currentEmail: import.meta.env.VITE_ADMIN_EMAIL ?? "admin@nilkanth.com",
+  // FIX: Separate email section fields from password section fields.
+  // Previously both shared `oldPassword`, causing the email change to fail
+  // when the password fields were empty (and vice versa).
+
+  const [currentEmail, setCurrentEmail] = useState("Loading...");
+
+  // Email change form
+  const [emailForm, setEmailForm] = useState({
     newEmail: "",
+    currentPasswordForEmail: "", // dedicated field — not shared with password section
+  });
+  const [showEmailPass, setShowEmailPass] = useState(false);
+
+  // Password change form
+  const [passwordForm, setPasswordForm] = useState({
     oldPassword: "",
     newPassword: "",
     confirmPassword: "",
   });
+
+  useEffect(() => {
+    AdminAPI.getProfile()
+      .then((res) => setCurrentEmail(res.data.email))
+      .catch(() => setCurrentEmail("Unknown"));
+  }, []);
 
   // ─────────────────────────────────────────────────────────────────────────
   //  Handlers
@@ -461,33 +408,64 @@ export default function SettingsPage() {
     showToast("success", "Template saved!");
   };
 
+  // ── Change Email (real API) ────────────────────────────────────────────────
+  const handleChangeEmail = async () => {
+    if (!emailForm.newEmail.trim()) {
+      showToast("error", "Please enter a new email address.");
+      return;
+    }
+    if (!emailForm.currentPasswordForEmail) {
+      showToast("error", "Current password is required to change email.");
+      return;
+    }
+
+    setLoading((p) => ({ ...p, email: true }));
+    try {
+      const res = await AdminAPI.changeEmail(
+        emailForm.newEmail.trim(),
+        emailForm.currentPasswordForEmail,
+      );
+      // FIX: persist the new token so future protected requests still work
+      localStorage.setItem("token", res.data.token);
+      setCurrentEmail(res.data.admin.email);
+      setEmailForm({ newEmail: "", currentPasswordForEmail: "" });
+      showToast("success", "Email updated successfully!");
+    } catch (err: unknown) {
+      showToast("error", err instanceof Error ? err.message : "Failed to update email.");
+    } finally {
+      setLoading((p) => ({ ...p, email: false }));
+    }
+  };
+
+  // ── Change Password (real API) ─────────────────────────────────────────────
   const handleChangePassword = async () => {
-    if (
-      !credentials.oldPassword ||
-      !credentials.newPassword ||
-      !credentials.confirmPassword
-    ) {
+    if (!passwordForm.oldPassword || !passwordForm.newPassword || !passwordForm.confirmPassword) {
       showToast("error", "All password fields are required.");
       return;
     }
-    if (credentials.newPassword !== credentials.confirmPassword) {
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
       showToast("error", "New passwords do not match.");
       return;
     }
-    if (credentials.newPassword.length < 8) {
+    if (passwordForm.newPassword.length < 8) {
       showToast("error", "Password must be at least 8 characters.");
       return;
     }
-    await save(
-      "password",
-      "Password updated! Update your .env file accordingly.",
-    );
-    setCredentials((prev) => ({
-      ...prev,
-      oldPassword: "",
-      newPassword: "",
-      confirmPassword: "",
-    }));
+
+    setLoading((p) => ({ ...p, password: true }));
+    try {
+      await AdminAPI.changePassword(
+        passwordForm.oldPassword,
+        passwordForm.newPassword,
+        passwordForm.confirmPassword,
+      );
+      setPasswordForm({ oldPassword: "", newPassword: "", confirmPassword: "" });
+      showToast("success", "Password updated successfully!");
+    } catch (err: unknown) {
+      showToast("error", err instanceof Error ? err.message : "Failed to update password.");
+    } finally {
+      setLoading((p) => ({ ...p, password: false }));
+    }
   };
 
   const handleDangerReset = () => {
@@ -503,11 +481,7 @@ export default function SettingsPage() {
   return (
     <>
       {toast && (
-        <Toast
-          type={toast.type}
-          message={toast.message}
-          onClose={() => setToast(null)}
-        />
+        <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} />
       )}
 
       <div className="flex flex-col gap-6 pb-8">
@@ -515,10 +489,7 @@ export default function SettingsPage() {
         <div className="flex items-center gap-2">
           <Settings size={20} color={Colors.primary} strokeWidth={2} />
           <div>
-            <h1
-              className="text-xl font-bold"
-              style={{ color: Colors.textPrimary }}
-            >
+            <h1 className="text-xl font-bold" style={{ color: Colors.textPrimary }}>
               Settings
             </h1>
             <p className="text-xs" style={{ color: Colors.textMuted }}>
@@ -526,169 +497,6 @@ export default function SettingsPage() {
             </p>
           </div>
         </div>
-
-        {/* ══════════════════════════════════════
-            1. STORE INFORMATION
-        ══════════════════════════════════════ */}
-        {/* <SectionCard
-          icon={Store}
-          title="Store Information"
-          subtitle="Your pharmacy's public details"
-        >
-          <div className="flex flex-col gap-5">
-            <div className="flex items-center gap-4">
-              <div
-                className="w-16 h-16 rounded-2xl overflow-hidden flex items-center justify-center flex-shrink-0"
-                style={{
-                  background: store.logoUrl
-                    ? "transparent"
-                    : `linear-gradient(135deg, ${Colors.gradientStart}, ${Colors.gradientEnd})`,
-                  border: `2px dashed ${Colors.border}`,
-                }}
-              >
-                {store.logoUrl ? (
-                  <img
-                    src={store.logoUrl}
-                    alt="logo"
-                    className="w-full h-full object-cover"
-                    onError={() => setStore((p) => ({ ...p, logoUrl: "" }))}
-                  />
-                ) : (
-                  <span
-                    className="text-xl font-black"
-                    style={{ color: Colors.white }}
-                  >
-                    N
-                  </span>
-                )}
-              </div>
-              <div>
-                <p
-                  className="text-sm font-semibold"
-                  style={{ color: Colors.textPrimary }}
-                >
-                  Store Logo
-                </p>
-                <p className="text-xs mb-2" style={{ color: Colors.textMuted }}>
-                  PNG or JPG, min 200×200px
-                </p>
-                <button
-                  onClick={() => logoInputRef.current?.click()}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold"
-                  style={{
-                    background: Colors.primaryLight,
-                    color: Colors.primary,
-                    border: `1px solid ${Colors.accentLight}`,
-                  }}
-                >
-                  <Upload size={13} strokeWidth={2} /> Upload Logo
-                </button>
-                <input
-                  ref={logoInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file)
-                      setStore((p) => ({
-                        ...p,
-                        logoUrl: URL.createObjectURL(file),
-                      }));
-                  }}
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <FieldRow label="Store Name">
-                <InputField
-                  icon={Store}
-                  focused={focused === "sname"}
-                  value={store.name}
-                  onChange={(v) => setStore((p) => ({ ...p, name: v }))}
-                  onFocus={() => setFocused("sname")}
-                  onBlur={() => setFocused("")}
-                  placeholder="Nilkanth Medical Store"
-                />
-              </FieldRow>
-              <FieldRow label="Phone Number">
-                <InputField
-                  icon={Phone}
-                  focused={focused === "sphone"}
-                  value={store.phone}
-                  onChange={(v) => setStore((p) => ({ ...p, phone: v }))}
-                  onFocus={() => setFocused("sphone")}
-                  onBlur={() => setFocused("")}
-                  placeholder="+91 98765 43210"
-                />
-              </FieldRow>
-              <FieldRow label="Email">
-                <InputField
-                  icon={Mail}
-                  focused={focused === "semail"}
-                  value={store.email}
-                  onChange={(v) => setStore((p) => ({ ...p, email: v }))}
-                  onFocus={() => setFocused("semail")}
-                  onBlur={() => setFocused("")}
-                  placeholder="store@example.com"
-                />
-              </FieldRow>
-              <FieldRow label="Website (optional)">
-                <InputField
-                  icon={Globe}
-                  focused={focused === "sweb"}
-                  value={store.website}
-                  onChange={(v) => setStore((p) => ({ ...p, website: v }))}
-                  onFocus={() => setFocused("sweb")}
-                  onBlur={() => setFocused("")}
-                  placeholder="https://nilkanthmedical.com"
-                />
-              </FieldRow>
-            </div>
-            <FieldRow label="Store Address">
-              <div
-                className="relative rounded-2xl overflow-hidden transition-all duration-200"
-                style={{
-                  background:
-                    focused === "saddr"
-                      ? Colors.primaryLight
-                      : Colors.surfaceAlt,
-                  border: `1.5px solid ${focused === "saddr" ? Colors.borderFocus : Colors.border}`,
-                }}
-              >
-                <div
-                  className="absolute top-3.5 left-3.5 pointer-events-none"
-                  style={{
-                    color:
-                      focused === "saddr" ? Colors.primary : Colors.textMuted,
-                  }}
-                >
-                  <MapPin size={17} strokeWidth={2} />
-                </div>
-                <textarea
-                  rows={2}
-                  value={store.address}
-                  onChange={(e) =>
-                    setStore((p) => ({ ...p, address: e.target.value }))
-                  }
-                  onFocus={() => setFocused("saddr")}
-                  onBlur={() => setFocused("")}
-                  placeholder="Full store address…"
-                  className="w-full pl-10 pr-4 py-3.5 text-sm outline-none resize-none bg-transparent"
-                  style={{ color: Colors.textPrimary }}
-                />
-              </div>
-            </FieldRow>
-
-            <div className="flex justify-end">
-              <SaveBtn
-                loading={!!loading["store"]}
-                onClick={() => save("store", "Store information saved!")}
-              />
-            </div>
-          </div>
-        </SectionCard> */}
 
         {/* ══════════════════════════════════════
             2. WHATSAPP CONFIGURATION
@@ -735,19 +543,13 @@ export default function SettingsPage() {
                     <div
                       className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
                       style={{
-                        background: r.isGroup
-                          ? `${Colors.info}18`
-                          : Colors.primaryLight,
+                        background: r.isGroup ? `${Colors.info}18` : Colors.primaryLight,
                       }}
                     >
                       {r.isGroup ? (
                         <Users size={17} color={Colors.info} strokeWidth={2} />
                       ) : (
-                        <Phone
-                          size={17}
-                          color={Colors.primary}
-                          strokeWidth={2}
-                        />
+                        <Phone size={17} color={Colors.primary} strokeWidth={2} />
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
@@ -757,24 +559,17 @@ export default function SettingsPage() {
                       >
                         {r.label}
                       </p>
-                      <p
-                        className="text-xs truncate"
-                        style={{ color: Colors.textMuted }}
-                      >
+                      <p className="text-xs truncate" style={{ color: Colors.textMuted }}>
                         {r.isGroup ? "Group" : "+91"} {r.number}
                       </p>
                     </div>
                     <button
                       onClick={() =>
                         setWaRecipients((prev) =>
-                          prev.map((x) =>
-                            x.id === r.id ? { ...x, active: !x.active } : x,
-                          ),
+                          prev.map((x) => (x.id === r.id ? { ...x, active: !x.active } : x)),
                         )
                       }
-                      style={{
-                        color: r.active ? Colors.primary : Colors.textMuted,
-                      }}
+                      style={{ color: r.active ? Colors.primary : Colors.textMuted }}
                     >
                       {r.active ? (
                         <ToggleRight size={30} strokeWidth={1.5} />
@@ -787,16 +582,12 @@ export default function SettingsPage() {
                       className="p-1.5 rounded-xl transition-colors"
                       style={{ color: Colors.textMuted }}
                       onMouseEnter={(e) => {
-                        (e.currentTarget as HTMLElement).style.color =
-                          Colors.error;
-                        (e.currentTarget as HTMLElement).style.background =
-                          "#FFF0F3";
+                        (e.currentTarget as HTMLElement).style.color = Colors.error;
+                        (e.currentTarget as HTMLElement).style.background = "#FFF0F3";
                       }}
                       onMouseLeave={(e) => {
-                        (e.currentTarget as HTMLElement).style.color =
-                          Colors.textMuted;
-                        (e.currentTarget as HTMLElement).style.background =
-                          "transparent";
+                        (e.currentTarget as HTMLElement).style.color = Colors.textMuted;
+                        (e.currentTarget as HTMLElement).style.background = "transparent";
                       }}
                     >
                       <Trash2 size={16} strokeWidth={2} />
@@ -823,10 +614,7 @@ export default function SettingsPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div
                       className="relative flex items-center rounded-2xl overflow-hidden"
-                      style={{
-                        background: Colors.surface,
-                        border: `1.5px solid ${Colors.border}`,
-                      }}
+                      style={{ background: Colors.surface, border: `1.5px solid ${Colors.border}` }}
                     >
                       <div
                         className="absolute left-3.5 pointer-events-none"
@@ -839,10 +627,7 @@ export default function SettingsPage() {
                         placeholder="Label (e.g. Delivery)"
                         value={newRecipient.label}
                         onChange={(e) =>
-                          setNewRecipient((p) => ({
-                            ...p,
-                            label: e.target.value,
-                          }))
+                          setNewRecipient((p) => ({ ...p, label: e.target.value }))
                         }
                         className="w-full pl-10 pr-4 py-3 text-sm outline-none bg-transparent"
                         style={{ color: Colors.textPrimary }}
@@ -850,10 +635,7 @@ export default function SettingsPage() {
                     </div>
                     <div
                       className="relative flex items-center rounded-2xl overflow-hidden"
-                      style={{
-                        background: Colors.surface,
-                        border: `1.5px solid ${Colors.border}`,
-                      }}
+                      style={{ background: Colors.surface, border: `1.5px solid ${Colors.border}` }}
                     >
                       <div
                         className="absolute left-3.5 pointer-events-none"
@@ -866,10 +648,7 @@ export default function SettingsPage() {
                         placeholder="Phone or Group ID"
                         value={newRecipient.number}
                         onChange={(e) =>
-                          setNewRecipient((p) => ({
-                            ...p,
-                            number: e.target.value,
-                          }))
+                          setNewRecipient((p) => ({ ...p, number: e.target.value }))
                         }
                         className="w-full pl-10 pr-4 py-3 text-sm outline-none bg-transparent"
                         style={{ color: Colors.textPrimary }}
@@ -885,10 +664,7 @@ export default function SettingsPage() {
                         type="checkbox"
                         checked={newRecipient.isGroup}
                         onChange={(e) =>
-                          setNewRecipient((p) => ({
-                            ...p,
-                            isGroup: e.target.checked,
-                          }))
+                          setNewRecipient((p) => ({ ...p, isGroup: e.target.checked }))
                         }
                         className="w-4 h-4 rounded accent-primary"
                       />
@@ -987,44 +763,26 @@ export default function SettingsPage() {
           <div className="flex flex-col gap-3">
             <p
               className="text-xs px-3 py-2 rounded-xl"
-              style={{
-                background: Colors.primaryLight,
-                color: Colors.textSecondary,
-              }}
+              style={{ background: Colors.primaryLight, color: Colors.textSecondary }}
             >
               Available variables:{" "}
-              <span
-                className="font-mono font-semibold"
-                style={{ color: Colors.primary }}
-              >
+              <span className="font-mono font-semibold" style={{ color: Colors.primary }}>
                 {"{{orderNo}}"}
               </span>{" "}
               ·{" "}
-              <span
-                className="font-mono font-semibold"
-                style={{ color: Colors.primary }}
-              >
+              <span className="font-mono font-semibold" style={{ color: Colors.primary }}>
                 {"{{customerName}}"}
               </span>{" "}
               ·{" "}
-              <span
-                className="font-mono font-semibold"
-                style={{ color: Colors.primary }}
-              >
+              <span className="font-mono font-semibold" style={{ color: Colors.primary }}>
                 {"{{total}}"}
               </span>{" "}
               ·{" "}
-              <span
-                className="font-mono font-semibold"
-                style={{ color: Colors.primary }}
-              >
+              <span className="font-mono font-semibold" style={{ color: Colors.primary }}>
                 {"{{productName}}"}
               </span>{" "}
               ·{" "}
-              <span
-                className="font-mono font-semibold"
-                style={{ color: Colors.primary }}
-              >
+              <span className="font-mono font-semibold" style={{ color: Colors.primary }}>
                 {"{{qty}}"}
               </span>
             </p>
@@ -1051,10 +809,7 @@ export default function SettingsPage() {
                       color={t.active ? Colors.primary : Colors.textMuted}
                       strokeWidth={2}
                     />
-                    <p
-                      className="text-sm font-semibold"
-                      style={{ color: Colors.textPrimary }}
-                    >
+                    <p className="text-sm font-semibold" style={{ color: Colors.textPrimary }}>
                       {t.event}
                     </p>
                   </div>
@@ -1087,16 +842,12 @@ export default function SettingsPage() {
                         className="p-1.5 rounded-xl transition-colors"
                         style={{ color: Colors.textMuted }}
                         onMouseEnter={(e) => {
-                          (e.currentTarget as HTMLElement).style.color =
-                            Colors.primary;
-                          (e.currentTarget as HTMLElement).style.background =
-                            Colors.primaryLight;
+                          (e.currentTarget as HTMLElement).style.color = Colors.primary;
+                          (e.currentTarget as HTMLElement).style.background = Colors.primaryLight;
                         }}
                         onMouseLeave={(e) => {
-                          (e.currentTarget as HTMLElement).style.color =
-                            Colors.textMuted;
-                          (e.currentTarget as HTMLElement).style.background =
-                            "transparent";
+                          (e.currentTarget as HTMLElement).style.color = Colors.textMuted;
+                          (e.currentTarget as HTMLElement).style.background = "transparent";
                         }}
                       >
                         <ChevronRight size={16} strokeWidth={2} />
@@ -1105,14 +856,10 @@ export default function SettingsPage() {
                     <button
                       onClick={() =>
                         setTemplates((prev) =>
-                          prev.map((x) =>
-                            x.id === t.id ? { ...x, active: !x.active } : x,
-                          ),
+                          prev.map((x) => (x.id === t.id ? { ...x, active: !x.active } : x)),
                         )
                       }
-                      style={{
-                        color: t.active ? Colors.primary : Colors.textMuted,
-                      }}
+                      style={{ color: t.active ? Colors.primary : Colors.textMuted }}
                     >
                       {t.active ? (
                         <ToggleRight size={28} strokeWidth={1.5} />
@@ -1137,10 +884,7 @@ export default function SettingsPage() {
                       autoFocus
                     />
                   ) : (
-                    <p
-                      className="text-sm leading-relaxed"
-                      style={{ color: Colors.textSecondary }}
-                    >
+                    <p className="text-sm leading-relaxed" style={{ color: Colors.textSecondary }}>
                       {t.message}
                     </p>
                   )}
@@ -1156,15 +900,16 @@ export default function SettingsPage() {
         <SectionCard
           icon={ShieldCheck}
           title="Admin Credentials"
-          subtitle="Update login email and password (also update your .env file)"
+          subtitle="Update login email and password"
         >
           <div className="flex flex-col gap-5">
+            {/* ── EMAIL SECTION ── */}
             {/* Current email (readonly) */}
             <FieldRow label="Current Email">
               <InputField
                 icon={Mail}
                 focused={false}
-                value={credentials.currentEmail}
+                value={currentEmail}
                 onFocus={() => {}}
                 onBlur={() => {}}
                 readOnly
@@ -1172,12 +917,12 @@ export default function SettingsPage() {
             </FieldRow>
 
             {/* New email */}
-            <FieldRow label="New Email (optional)">
+            <FieldRow label="New Email">
               <InputField
                 icon={Mail}
                 focused={focused === "newemail"}
-                value={credentials.newEmail}
-                onChange={(v) => setCredentials((p) => ({ ...p, newEmail: v }))}
+                value={emailForm.newEmail}
+                onChange={(v) => setEmailForm((p) => ({ ...p, newEmail: v }))}
                 onFocus={() => setFocused("newemail")}
                 onBlur={() => setFocused("")}
                 placeholder="new@admin.com"
@@ -1185,12 +930,60 @@ export default function SettingsPage() {
               />
             </FieldRow>
 
-            <div
-              className="my-1"
-              style={{ borderTop: `1px solid ${Colors.divider}` }}
-            />
+            {/* Password confirmation for email change — its own dedicated field */}
+            <FieldRow label="Current Password (to confirm email change)">
+              <div
+                className="relative flex items-center rounded-2xl overflow-hidden transition-all duration-200"
+                style={{
+                  background: focused === "emailpass" ? Colors.primaryLight : Colors.surfaceAlt,
+                  border: `1.5px solid ${focused === "emailpass" ? Colors.borderFocus : Colors.border}`,
+                }}
+              >
+                <div
+                  className="absolute left-3.5 pointer-events-none"
+                  style={{ color: focused === "emailpass" ? Colors.primary : Colors.textMuted }}
+                >
+                  <Lock size={17} strokeWidth={2} />
+                </div>
+                <input
+                  type={showEmailPass ? "text" : "password"}
+                  value={emailForm.currentPasswordForEmail}
+                  onChange={(e) =>
+                    setEmailForm((p) => ({ ...p, currentPasswordForEmail: e.target.value }))
+                  }
+                  onFocus={() => setFocused("emailpass")}
+                  onBlur={() => setFocused("")}
+                  placeholder="••••••••"
+                  className="w-full pl-10 pr-12 py-3.5 text-sm outline-none bg-transparent"
+                  style={{ color: Colors.textPrimary }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowEmailPass((v) => !v)}
+                  className="absolute right-3.5 transition-colors"
+                  style={{ color: showEmailPass ? Colors.primary : Colors.textMuted }}
+                  tabIndex={-1}
+                >
+                  {showEmailPass ? (
+                    <EyeOff size={18} strokeWidth={2} />
+                  ) : (
+                    <Eye size={18} strokeWidth={2} />
+                  )}
+                </button>
+              </div>
+            </FieldRow>
 
-            {/* Password section */}
+            <div className="flex justify-end">
+              <SaveBtn
+                loading={!!loading["email"]}
+                onClick={handleChangeEmail}
+                label="Update Email"
+              />
+            </div>
+
+            <div className="my-1" style={{ borderTop: `1px solid ${Colors.divider}` }} />
+
+            {/* ── PASSWORD SECTION ── */}
             <p
               className="text-xs font-bold uppercase tracking-wide"
               style={{ color: Colors.textMuted }}
@@ -1198,49 +991,47 @@ export default function SettingsPage() {
               Change Password
             </p>
 
-            {[
-              {
-                key: "oldPassword",
-                label: "Current Password",
-                show: showOldPass,
-                setShow: setShowOldPass,
-              },
-              {
-                key: "newPassword",
-                label: "New Password",
-                show: showNewPass,
-                setShow: setShowNewPass,
-              },
-              {
-                key: "confirmPassword",
-                label: "Confirm Password",
-                show: showConfirmPass,
-                setShow: setShowConfirmPass,
-              },
-            ].map(({ key, label, show, setShow }) => (
+            {(
+              [
+                {
+                  key: "oldPassword" as const,
+                  label: "Current Password",
+                  show: showOldPass,
+                  setShow: setShowOldPass,
+                },
+                {
+                  key: "newPassword" as const,
+                  label: "New Password",
+                  show: showNewPass,
+                  setShow: setShowNewPass,
+                },
+                {
+                  key: "confirmPassword" as const,
+                  label: "Confirm Password",
+                  show: showConfirmPass,
+                  setShow: setShowConfirmPass,
+                },
+              ] as const
+            ).map(({ key, label, show, setShow }) => (
               <FieldRow key={key} label={label}>
                 <div
                   className="relative flex items-center rounded-2xl overflow-hidden transition-all duration-200"
                   style={{
-                    background:
-                      focused === key ? Colors.primaryLight : Colors.surfaceAlt,
+                    background: focused === key ? Colors.primaryLight : Colors.surfaceAlt,
                     border: `1.5px solid ${focused === key ? Colors.borderFocus : Colors.border}`,
                   }}
                 >
                   <div
                     className="absolute left-3.5 pointer-events-none"
-                    style={{
-                      color:
-                        focused === key ? Colors.primary : Colors.textMuted,
-                    }}
+                    style={{ color: focused === key ? Colors.primary : Colors.textMuted }}
                   >
                     <Lock size={17} strokeWidth={2} />
                   </div>
                   <input
                     type={show ? "text" : "password"}
-                    value={credentials[key as keyof typeof credentials]}
+                    value={passwordForm[key]}
                     onChange={(e) =>
-                      setCredentials((p) => ({ ...p, [key]: e.target.value }))
+                      setPasswordForm((p) => ({ ...p, [key]: e.target.value }))
                     }
                     onFocus={() => setFocused(key)}
                     onBlur={() => setFocused("")}
@@ -1265,29 +1056,11 @@ export default function SettingsPage() {
               </FieldRow>
             ))}
 
-            <div
-              className="px-4 py-3 rounded-2xl text-xs leading-relaxed"
-              style={{
-                background: `${Colors.warning}12`,
-                border: `1px solid ${Colors.warning}30`,
-                color: Colors.textSecondary,
-              }}
-            >
-              ⚠️ After changing credentials, update{" "}
-              <span className="font-mono font-semibold">VITE_ADMIN_EMAIL</span>{" "}
-              and{" "}
-              <span className="font-mono font-semibold">
-                VITE_ADMIN_PASSWORD
-              </span>{" "}
-              in your <span className="font-mono font-semibold">.env</span> file
-              and restart the dev server.
-            </div>
-
             <div className="flex justify-end">
               <SaveBtn
                 loading={!!loading["password"]}
                 onClick={handleChangePassword}
-                label="Update Credentials"
+                label="Update Password"
               />
             </div>
           </div>
@@ -1350,10 +1123,7 @@ export default function SettingsPage() {
                 <div className="flex items-center gap-3">
                   <Icon size={18} color={Colors.error} strokeWidth={2} />
                   <div>
-                    <p
-                      className="text-sm font-semibold"
-                      style={{ color: Colors.textPrimary }}
-                    >
+                    <p className="text-sm font-semibold" style={{ color: Colors.textPrimary }}>
                       {label}
                     </p>
                     <p className="text-xs" style={{ color: Colors.textMuted }}>
@@ -1370,13 +1140,11 @@ export default function SettingsPage() {
                     border: `1.5px solid #FFD0DA`,
                   }}
                   onMouseEnter={(e) => {
-                    (e.currentTarget as HTMLElement).style.background =
-                      Colors.error;
+                    (e.currentTarget as HTMLElement).style.background = Colors.error;
                     (e.currentTarget as HTMLElement).style.color = Colors.white;
                   }}
                   onMouseLeave={(e) => {
-                    (e.currentTarget as HTMLElement).style.background =
-                      "#FFF0F3";
+                    (e.currentTarget as HTMLElement).style.background = "#FFF0F3";
                     (e.currentTarget as HTMLElement).style.color = Colors.error;
                   }}
                 >
@@ -1416,22 +1184,15 @@ export default function SettingsPage() {
               >
                 <AlertTriangle size={24} color={Colors.error} strokeWidth={2} />
               </div>
-              <h3
-                className="text-base font-bold mb-1"
-                style={{ color: Colors.textPrimary }}
-              >
+              <h3 className="text-base font-bold mb-1" style={{ color: Colors.textPrimary }}>
                 Are you absolutely sure?
               </h3>
-              <p
-                className="text-sm mb-4"
-                style={{ color: Colors.textSecondary }}
-              >
+              <p className="text-sm mb-4" style={{ color: Colors.textSecondary }}>
                 This action is{" "}
                 <span className="font-bold" style={{ color: Colors.error }}>
                   permanent and irreversible
                 </span>
-                . Type <span className="font-mono font-bold">RESET</span> to
-                confirm.
+                . Type <span className="font-mono font-bold">RESET</span> to confirm.
               </p>
               <input
                 type="text"
@@ -1464,8 +1225,7 @@ export default function SettingsPage() {
                   onClick={handleDangerReset}
                   className="flex-1 py-2.5 rounded-2xl text-sm font-semibold transition-all duration-150"
                   style={{
-                    background:
-                      dangerInput === "RESET" ? Colors.error : "#FFD0DA",
+                    background: dangerInput === "RESET" ? Colors.error : "#FFD0DA",
                     color: dangerInput === "RESET" ? Colors.white : "#FFAAAA",
                     cursor: dangerInput === "RESET" ? "pointer" : "not-allowed",
                   }}

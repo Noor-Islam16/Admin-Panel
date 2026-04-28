@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import {
   Users,
@@ -12,6 +13,7 @@ import {
 } from "lucide-react";
 import Colors from "../constants/colors";
 import { adminRoutes } from "../config/routes.config";
+import { AdminAPI } from "../config/api";
 
 const NAV_ITEMS = [
   {
@@ -54,9 +56,19 @@ const NAV_ITEMS = [
 
 export default function DashboardLayout() {
   const navigate = useNavigate();
+  // FIX: load the real admin email from the backend so it always reflects
+  // the current value — even after the admin changes it in Settings
+  const [adminEmail, setAdminEmail] = useState("");
+
+  useEffect(() => {
+    AdminAPI.getProfile()
+      .then((res) => setAdminEmail(res.data.email))
+      .catch(() => setAdminEmail("admin"));
+  }, []);
 
   const handleLogout = () => {
-    localStorage.removeItem("adminAuth");
+    // FIX: was "adminAuth" — must match the key set in AdminLoginPage
+    localStorage.removeItem("token");
     navigate("/");
   };
 
@@ -195,7 +207,6 @@ export default function DashboardLayout() {
           }}
         >
           <div className="flex items-center gap-3">
-            {/* Mobile/tablet: show brand shield since there's no sidebar */}
             <div
               className="lg:hidden w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
               style={{
@@ -218,7 +229,6 @@ export default function DashboardLayout() {
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Logout — mobile/tablet header only */}
             <button
               onClick={handleLogout}
               className="lg:hidden p-2 rounded-xl transition-colors"
@@ -235,8 +245,9 @@ export default function DashboardLayout() {
               >
                 Admin
               </p>
+              {/* FIX: real email from DB, not a hardcoded env var */}
               <p className="text-xs" style={{ color: Colors.textMuted }}>
-                {import.meta.env.VITE_ADMIN_EMAIL ?? "admin@example.com"}
+                {adminEmail}
               </p>
             </div>
             <div
@@ -252,7 +263,6 @@ export default function DashboardLayout() {
         </header>
 
         {/* ── Page Content ── */}
-        {/* pb-[80px] reserves space above the bottom tab bar on mobile/tablet */}
         <main className="flex-1 overflow-y-auto p-4 lg:p-6 pb-[80px] lg:pb-6">
           <Outlet />
         </main>
@@ -260,7 +270,6 @@ export default function DashboardLayout() {
 
       {/* ══════════════════════════════════════
           MOBILE / TABLET BOTTOM TAB BAR (below lg)
-          Uses shortLabel to keep tabs compact
       ══════════════════════════════════════ */}
       <nav
         className="lg:hidden fixed bottom-0 left-0 right-0 z-40 flex items-stretch"
@@ -282,7 +291,6 @@ export default function DashboardLayout() {
           >
             {({ isActive }) => (
               <>
-                {/* Active top pill indicator */}
                 {isActive && (
                   <div
                     className="absolute top-0 left-1/2 -translate-x-1/2 rounded-b-full"
@@ -294,7 +302,6 @@ export default function DashboardLayout() {
                   />
                 )}
 
-                {/* Icon with frosted active bg */}
                 <div
                   className="flex items-center justify-center rounded-xl transition-all duration-200"
                   style={{

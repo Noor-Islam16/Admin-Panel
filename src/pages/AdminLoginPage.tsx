@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import Colors from "../constants/colors";
 import { useNavigate } from "react-router-dom";
+import { AdminAPI } from "../config/api";
 
 export default function AdminLoginPage() {
   const [email, setEmail] = useState("");
@@ -31,24 +32,6 @@ export default function AdminLoginPage() {
     setTimeout(() => emailRef.current?.focus(), 600);
   }, []);
 
-  // Add this for debugging - remove after fixing
-  useEffect(() => {
-    console.log("=== ENVIRONMENT VARIABLES DEBUG ===");
-    console.log("All env vars:", import.meta.env);
-    console.log("VITE_ADMIN_EMAIL:", import.meta.env.VITE_ADMIN_EMAIL);
-    console.log("VITE_ADMIN_PASSWORD:", import.meta.env.VITE_ADMIN_PASSWORD);
-    console.log("Type of email:", typeof import.meta.env.VITE_ADMIN_EMAIL);
-    console.log("===================================");
-
-    // Check if env vars are empty
-    if (!import.meta.env.VITE_ADMIN_EMAIL) {
-      console.error("❌ VITE_ADMIN_EMAIL is not loaded!");
-    }
-    if (!import.meta.env.VITE_ADMIN_PASSWORD) {
-      console.error("❌ VITE_ADMIN_PASSWORD is not loaded!");
-    }
-  }, []);
-
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -63,22 +46,15 @@ export default function AdminLoginPage() {
     }
 
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 1400));
-
-    const envEmail = import.meta.env.VITE_ADMIN_EMAIL;
-    const envPassword = import.meta.env.VITE_ADMIN_PASSWORD;
-
-    if (email.trim() === envEmail && password === envPassword) {
-      // THIS IS THE KEY FIX - Store authentication
-      localStorage.setItem("adminAuth", "true");
-
+    try {
+      // FIX: call real backend API instead of comparing against env vars
+      const res = await AdminAPI.login(email.trim(), password);
+      // Store JWT so authHeaders() can read it for all protected requests
+      localStorage.setItem("token", res.data.token);
       setSuccess(true);
-      // THIS IS THE SECOND FIX - Add small delay
-      setTimeout(() => {
-        navigate("/dashboard");
-      }, 500);
-    } else {
-      setError("Invalid email or password. Please try again.");
+      setTimeout(() => navigate("/dashboard"), 500);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Invalid email or password.");
       setLoading(false);
     }
   };
@@ -270,13 +246,6 @@ export default function AdminLoginPage() {
                   >
                     Password
                   </label>
-                  <button
-                    type="button"
-                    className="text-xs font-medium transition-colors duration-150 hover:underline"
-                    style={{ color: Colors.primary }}
-                  >
-                    Forgot password?
-                  </button>
                 </div>
                 <div className="relative">
                   <div
@@ -315,9 +284,7 @@ export default function AdminLoginPage() {
                       color: showPassword ? Colors.primary : Colors.textMuted,
                     }}
                     tabIndex={-1}
-                    aria-label={
-                      showPassword ? "Hide password" : "Show password"
-                    }
+                    aria-label={showPassword ? "Hide password" : "Show password"}
                   >
                     {showPassword ? (
                       <EyeOff size={20} strokeWidth={2} />
@@ -327,24 +294,6 @@ export default function AdminLoginPage() {
                   </button>
                 </div>
               </div>
-
-              {/* ── Remember Me ── */}
-              <label className="flex items-center gap-3 cursor-pointer select-none">
-                <input type="checkbox" className="sr-only peer" />
-                <div
-                  className="w-5 h-5 rounded-md border-2 transition-all duration-150"
-                  style={{
-                    borderColor: Colors.border,
-                    background: Colors.surfaceAlt,
-                  }}
-                />
-                <span
-                  className="text-sm"
-                  style={{ color: Colors.textSecondary }}
-                >
-                  Remember me for 30 days
-                </span>
-              </label>
 
               {/* ── Submit Button ── */}
               <button

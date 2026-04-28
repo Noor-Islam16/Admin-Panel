@@ -1,4 +1,3 @@
-// config/routes.config.js
 export const adminRoutes = {
   BASE: import.meta.env.VITE_ADMIN_BASE_PATH,
   CUSTOMERS: import.meta.env.VITE_ADMIN_CUSTOMERS_PATH,

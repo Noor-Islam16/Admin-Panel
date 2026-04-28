@@ -15,21 +15,8 @@ import ManageStocks from "./pages/ManageStocks";
 import Orders from "./pages/Orders";
 import SettingsPage from "./pages/Settings";
 
-// ── Placeholder for sections not built yet ────────────────────────────────
-// const ComingSoon = ({ title }: { title: string }) => (
-//   <div className="flex flex-col items-center justify-center h-64 gap-3">
-//     <p className="text-2xl font-bold" style={{ color: "#111B21" }}>
-//       {title}
-//     </p>
-//     <p style={{ color: "#8696A0", fontSize: 14 }}>
-//       This section is coming soon.
-//     </p>
-//   </div>
-// );
-
-// Auth guard component
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const isAuthenticated = localStorage.getItem("adminAuth") === "true";
+  const isAuthenticated = !!localStorage.getItem("token");
   return isAuthenticated ? <>{children}</> : <Navigate to="/" replace />;
 };
 
