@@ -14,7 +14,7 @@ import { adminRoutes } from "./config/routes.config";
 import ManageStocks from "./pages/ManageStocks";
 import Orders from "./pages/Orders";
 import SettingsPage from "./pages/Settings";
-
+// Protected Routes below
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const isAuthenticated = !!localStorage.getItem("token");
   return isAuthenticated ? <>{children}</> : <Navigate to="/" replace />;
