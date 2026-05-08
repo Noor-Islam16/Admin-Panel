@@ -26,6 +26,7 @@ import Colors from "../constants/colors";
 
 // ─── API Base URL ────────────────────────────────────────────────────────────
 const API_BASE = "https://customer-7bcb.onrender.com";
+// const API_BASE = "http://localhost:5000";
 
 // ─── Types matching backend ──────────────────────────────────────────────────
 interface OrderItemImage {
@@ -195,19 +196,33 @@ function timeAgo(dateStr: string): string {
   return `${Math.floor(diff / 86400)}d ago`;
 }
 
+// ─── Updated Helpers ─────────────────────────────────────────────────────────
+
 function getCustomerName(order: Order): string {
-  return (
-    order.customer?.profile?.contactName || order.customer?.phone || "Unknown"
-  );
+  if (order.customer?.profile?.contactName) {
+    return order.customer.profile.contactName;
+  }
+  if (order.customer?.phone) {
+    return `+91 ${order.customer.phone}`;
+  }
+  // Check if customer is populated as object or just an ID
+  if (typeof order.customer === "object" && order.customer.phone) {
+    return `+91 ${order.customer.phone}`;
+  }
+  return "Unknown";
 }
 
 function getCustomerPhone(order: Order): string {
-  return order.customer?.phone || "";
+  if (order.customer?.phone) {
+    return order.customer.phone;
+  }
+  return "";
 }
 
 function getCustomerAddress(order: Order): string {
   const p = order.customer?.profile;
-  if (!p) return "No address";
+  if (!p) return "No address provided";
+
   const parts = [
     p.addressLine1,
     p.addressLine2,
@@ -215,19 +230,30 @@ function getCustomerAddress(order: Order): string {
     p.state,
     p.pincode,
   ].filter(Boolean);
-  return parts.join(", ");
+
+  return parts.length > 0 ? parts.join(", ") : "No address provided";
 }
 
 function buildWhatsAppMessage(order: Order): string {
+  const customerName = getCustomerName(order);
+  const customerPhone = getCustomerPhone(order);
+  const customerAddress = getCustomerAddress(order);
+
   const lines = [
-    `📱 *Electronics Store*`,
-    `📋 Order: ${order.orderNumber}`,
-    `👤 Customer: ${getCustomerName(order)}`,
-    `📞 Phone: +91 ${getCustomerPhone(order)}`,
-    `📍 Address: ${getCustomerAddress(order)}`,
+    `📱 *Electronics Store - Order Details*`,
     ``,
-    `*Order Items:*`,
-    ...order.items.map((item) => {
+    `📋 *Order:* ${order.orderNumber}`,
+    `📅 *Date:* ${new Date(order.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`,
+    `📊 *Status:* ${order.status?.replace(/_/g, " ").toUpperCase()}`,
+    `💳 *Payment:* ${order.paymentMethod?.toUpperCase() || "UPI"} | ${order.paymentStatus?.toUpperCase() || "PENDING"}`,
+    ``,
+    `👤 *Customer Details*`,
+    `Name: ${customerName}`,
+    `Phone: +91 ${customerPhone}`,
+    `Address: ${customerAddress}`,
+    ``,
+    `🛒 *Order Items (${order.items?.length || 0})*`,
+    ...order.items.map((item, idx) => {
       const details = [
         item.brand,
         item.type,
@@ -237,12 +263,31 @@ function buildWhatsAppMessage(order: Order): string {
         .filter(Boolean)
         .join(" · ");
 
-      return `• ${item.name}${details ? ` (${details})` : ""} × ${item.quantity} — ₹${item.lineTotal}`;
+      const itemName = details ? `${item.name} (${details})` : item.name;
+      const originalPrice =
+        item.originalPrice && item.originalPrice > item.sellingPrice
+          ? ` (MRP: ₹${item.originalPrice})`
+          : "";
+
+      return `${idx + 1}. ${itemName}\n   ₹${item.sellingPrice} × ${item.quantity} = ₹${item.lineTotal}${originalPrice}`;
     }),
     ``,
-    `💰 *Total: ₹${order.totalAmount}*`,
-    order.note ? `\n📝 Note: ${order.note}` : "",
+    `💰 *Bill Summary*`,
+    `Subtotal: ₹${order.subtotal?.toLocaleString("en-IN") || 0}`,
+    order.couponDiscount > 0 ? `Discount: -₹${order.couponDiscount}` : null,
+    `Delivery: ${order.deliveryCharge === 0 ? "FREE" : `₹${order.deliveryCharge}`}`,
+    `Platform Fee: ₹${order.platformFee || 0}`,
+    `GST: ₹${order.gst || 0}`,
+    order.deliveryTip > 0 ? `Delivery Tip: ₹${order.deliveryTip}` : null,
+    ``,
+    `💵 *Total Amount: ₹${order.totalAmount?.toLocaleString("en-IN") || 0}*`,
+    ``,
+    `📝 *Note:* ${order.note || "N/A"}`,
+    ``,
+    `_Thank you for shopping with us! 🙏_`,
   ].filter(Boolean);
+
+  // Encode the full message for WhatsApp URL
   return encodeURIComponent(lines.join("\n"));
 }
 
@@ -599,6 +644,7 @@ function OrderDrawer({
           </div>
 
           {/* WhatsApp */}
+          {/* WhatsApp */}
           <div className="px-6 py-5">
             <p
               className="text-xs font-bold uppercase tracking-wide mb-3"
@@ -609,15 +655,34 @@ function OrderDrawer({
             <a
               href={`https://wa.me/?text=${waMsg}`}
               target="_blank"
-              rel="noreferrer"
-              className="flex items-center justify-center gap-2 w-full py-3 rounded-2xl text-sm font-semibold text-white"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-2 w-full py-3 rounded-2xl text-sm font-semibold text-white transition-all duration-150"
               style={{
                 background: "#25D366",
                 boxShadow: "0 4px 14px rgba(37,211,102,0.3)",
               }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLElement).style.background = "#1ebe57";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLElement).style.background = "#25D366";
+              }}
+              onClick={(e) => {
+                // Prevent default if message is empty
+                if (!waMsg || waMsg === "") {
+                  e.preventDefault();
+                  alert("No order data available to share.");
+                }
+              }}
             >
-              <MessageCircle size={18} /> Share to WhatsApp
+              <MessageCircle size={18} /> Share Order via WhatsApp
             </a>
+            <p
+              className="text-xs mt-2 text-center"
+              style={{ color: Colors.textMuted }}
+            >
+              Opens WhatsApp with order details pre-filled
+            </p>
           </div>
         </div>
       </div>
