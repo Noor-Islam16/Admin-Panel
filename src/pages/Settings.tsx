@@ -13,6 +13,11 @@ import {
   Users,
   Save,
   RefreshCw,
+  Bell,
+  Send,
+  Smartphone,
+  ChevronDown,
+  Search,
 } from "lucide-react";
 import Colors from "../constants/colors";
 import { AdminAPI } from "../config/api";
@@ -181,8 +186,6 @@ function InputField({
   );
 }
 
-// ── Toggle Row ────────────────────────────────────────────────────────────────
-
 // ── Save Button ───────────────────────────────────────────────────────────────
 function SaveBtn({
   loading,
@@ -251,44 +254,152 @@ export default function SettingsPage() {
   const [showConfirmPass, setShowConfirmPass] = useState(false);
   const [showDangerConfirm, setShowDangerConfirm] = useState(false);
   const [dangerInput, setDangerInput] = useState("");
-
-  const showToast = (type: "success" | "error", message: string) => {
-    setToast({ type, message });
-    setTimeout(() => setToast(null), 3200);
-  };
-
-  // ── Admin Credentials ──────────────────────────────────────────────────────
-  // FIX: Separate email section fields from password section fields.
-  // Previously both shared `oldPassword`, causing the email change to fail
-  // when the password fields were empty (and vice versa).
-
-  const [currentEmail, setCurrentEmail] = useState("Loading...");
-
-  // Email change form
-  const [emailForm, setEmailForm] = useState({
-    newEmail: "",
-    currentPasswordForEmail: "", // dedicated field — not shared with password section
-  });
   const [showEmailPass, setShowEmailPass] = useState(false);
 
-  // Password change form
+  // ── Admin Credentials ──────────────────────────────────────────────────────
+  const [currentEmail, setCurrentEmail] = useState("Loading...");
+  const [emailForm, setEmailForm] = useState({
+    newEmail: "",
+    currentPasswordForEmail: "",
+  });
   const [passwordForm, setPasswordForm] = useState({
     oldPassword: "",
     newPassword: "",
     confirmPassword: "",
   });
 
+  // ── Manual Push Notification State ──────────────────────────────────────────
+  const [pushForm, setPushForm] = useState({
+    title: "",
+    body: "",
+    targetType: "all" as "all" | "specific" | "pending" | "approved",
+    selectedUsers: [] as string[],
+    screen: "",
+  });
+  const [showUserDropdown, setShowUserDropdown] = useState(false);
+  const [customers, setCustomers] = useState<
+    Array<{
+      _id: string;
+      phone: string;
+      profile?: { contactName?: string };
+      approvalStatus: string;
+      isActive: boolean;
+    }>
+  >([]);
+  const [customersLoading, setCustomersLoading] = useState(false);
+  const [customerSearch, setCustomerSearch] = useState("");
+  const [pushSending, setPushSending] = useState(false);
+  const [pushPreview, setPushPreview] = useState(false);
+
+  const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:5000/api";
+
+  const showToast = (type: "success" | "error", message: string) => {
+    setToast({ type, message });
+    setTimeout(() => setToast(null), 3200);
+  };
+
+  // ── Fetch admin profile ──────────────────────────────────────────────────
   useEffect(() => {
     AdminAPI.getProfile()
       .then((res) => setCurrentEmail(res.data.email))
       .catch(() => setCurrentEmail("Unknown"));
   }, []);
 
-  // ─────────────────────────────────────────────────────────────────────────
-  //  Handlers
-  // ─────────────────────────────────────────────────────────────────────────
+  // ── Fetch customers for push dropdown ────────────────────────────────────
+  const fetchCustomers = async () => {
+    setCustomersLoading(true);
+    try {
+      const token =
+        localStorage.getItem("token") ?? localStorage.getItem("adminToken");
+      const res = await fetch(`${API_BASE}/admin/customers?limit=200`, {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const data = await res.json();
+      if (data.success && data.data?.customers) {
+        setCustomers(data.data.customers);
+        console.log(
+          `✅ Loaded ${data.data.customers.length} customers for push`,
+        );
+      } else {
+        console.warn("⚠️ Unexpected customers response:", data);
+        setCustomers([]);
+      }
+    } catch (err) {
+      console.error("❌ Failed to fetch customers:", err);
+      setCustomers([]);
+    } finally {
+      setCustomersLoading(false);
+    }
+  };
 
-  // ── Change Email (real API) ────────────────────────────────────────────────
+  useEffect(() => {
+    fetchCustomers();
+  }, []);
+
+  // Filter customers based on search
+  const filteredCustomers = customers.filter((c) => {
+    const search = customerSearch.toLowerCase();
+    if (!search) return true;
+    return (
+      (c.profile?.contactName || "").toLowerCase().includes(search) ||
+      c.phone.includes(search)
+    );
+  });
+
+  // Get target description
+  const getTargetDescription = () => {
+    switch (pushForm.targetType) {
+      case "all":
+        return `All active customers (${customers.filter((c) => c.isActive).length} users)`;
+      case "pending":
+        const pending = customers.filter(
+          (c) =>
+            c.isActive &&
+            (c.approvalStatus === "pending" || c.approvalStatus === "manual"),
+        );
+        return `Pending approval (${pending.length} users)`;
+      case "approved":
+        const approved = customers.filter(
+          (c) =>
+            c.isActive &&
+            (c.approvalStatus === "approved" || c.approvalStatus === "auto"),
+        );
+        return `Approved customers (${approved.length} users)`;
+      case "specific":
+        return `${pushForm.selectedUsers.length} specific user(s) selected`;
+      default:
+        return "";
+    }
+  };
+
+  // Select all filtered
+  const handleSelectAllFiltered = () => {
+    const filteredIds = filteredCustomers.map((c) => c._id);
+    setPushForm((p) => ({
+      ...p,
+      selectedUsers: [...new Set([...p.selectedUsers, ...filteredIds])],
+    }));
+  };
+
+  // Clear only filtered
+  const handleClearFiltered = () => {
+    const filteredIds = new Set(filteredCustomers.map((c) => c._id));
+    setPushForm((p) => ({
+      ...p,
+      selectedUsers: p.selectedUsers.filter((id) => !filteredIds.has(id)),
+    }));
+  };
+
+  // Count selected from filtered list
+  const selectedFromFiltered = filteredCustomers.filter((c) =>
+    pushForm.selectedUsers.includes(c._id),
+  ).length;
+
+  // ── Handlers ──────────────────────────────────────────────────────────────
+
   const handleChangeEmail = async () => {
     if (!emailForm.newEmail.trim()) {
       showToast("error", "Please enter a new email address.");
@@ -305,7 +416,6 @@ export default function SettingsPage() {
         emailForm.newEmail.trim(),
         emailForm.currentPasswordForEmail,
       );
-      // FIX: persist the new token so future protected requests still work
       localStorage.setItem("token", res.data.token);
       setCurrentEmail(res.data.admin.email);
       setEmailForm({ newEmail: "", currentPasswordForEmail: "" });
@@ -320,7 +430,6 @@ export default function SettingsPage() {
     }
   };
 
-  // ── Change Password (real API) ─────────────────────────────────────────────
   const handleChangePassword = async () => {
     if (
       !passwordForm.oldPassword ||
@@ -362,6 +471,64 @@ export default function SettingsPage() {
     }
   };
 
+  // ── Send Manual Push Notification ──────────────────────────────────────────
+  const handleSendPush = async () => {
+    if (!pushForm.title.trim() || !pushForm.body.trim()) {
+      showToast("error", "Title and message body are required.");
+      return;
+    }
+
+    if (
+      pushForm.targetType === "specific" &&
+      pushForm.selectedUsers.length === 0
+    ) {
+      showToast("error", "Please select at least one user.");
+      return;
+    }
+
+    setPushSending(true);
+    try {
+      const token =
+        localStorage.getItem("token") ?? localStorage.getItem("adminToken");
+      const res = await fetch(`${API_BASE}/admin/send-push`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          title: pushForm.title.trim(),
+          body: pushForm.body.trim(),
+          targetType: pushForm.targetType,
+          selectedUsers: pushForm.selectedUsers,
+          screen: pushForm.screen || undefined,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        showToast(
+          "success",
+          `Notification sent to ${data.data.sentCount} user(s)!`,
+        );
+        setPushForm({
+          title: "",
+          body: "",
+          targetType: "all",
+          selectedUsers: [],
+          screen: "",
+        });
+        setPushPreview(false);
+      } else {
+        showToast("error", data.message || "Failed to send notification.");
+      }
+    } catch (err: any) {
+      showToast("error", err.message || "Failed to send notification.");
+    } finally {
+      setPushSending(false);
+    }
+  };
+
   const handleDangerReset = () => {
     if (dangerInput !== "RESET") {
       showToast("error", 'Type "RESET" to confirm.');
@@ -394,438 +561,680 @@ export default function SettingsPage() {
               Settings
             </h1>
             <p className="text-xs" style={{ color: Colors.textMuted }}>
-              Manage store, WhatsApp, notifications and admin preferences
+              Manage admin credentials, push notifications and preferences
             </p>
           </div>
         </div>
 
         {/* ══════════════════════════════════════
-            2. WHATSAPP CONFIGURATION
+             PUSH NOTIFICATION BROADCAST
         ══════════════════════════════════════ */}
-        {/* <SectionCard
-          icon={MessageCircle}
-          title="WhatsApp Configuration"
-          subtitle="Recipients and sharing preferences for order notifications"
+        <SectionCard
+          icon={Bell}
+          title="Push Notification Broadcast"
+          subtitle="Send manual push notifications to customers"
         >
           <div className="flex flex-col gap-5">
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <p
-                  className="text-xs font-bold uppercase tracking-wide"
-                  style={{ color: Colors.textMuted }}
-                >
-                  Recipients / Groups
-                </p>
-                <button
-                  onClick={() => setShowAddRecipient((v) => !v)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all duration-150"
-                  style={{
-                    background: Colors.primaryLight,
-                    color: Colors.primary,
-                    border: `1px solid ${Colors.accentLight}`,
-                  }}
-                >
-                  <Plus size={14} strokeWidth={2.5} /> Add Recipient
-                </button>
-              </div>
-
-              <div className="flex flex-col gap-2">
-                {waRecipients.map((r) => (
-                  <div
-                    key={r.id}
-                    className="flex items-center gap-3 px-4 py-3 rounded-2xl"
-                    style={{
-                      background: r.active ? Colors.surfaceAlt : "#FAFAFA",
-                      border: `1.5px solid ${r.active ? Colors.border : Colors.divider}`,
-                      opacity: r.active ? 1 : 0.6,
-                    }}
-                  >
-                    <div
-                      className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-                      style={{
-                        background: r.isGroup ? `${Colors.info}18` : Colors.primaryLight,
-                      }}
-                    >
-                      {r.isGroup ? (
-                        <Users size={17} color={Colors.info} strokeWidth={2} />
-                      ) : (
-                        <Phone size={17} color={Colors.primary} strokeWidth={2} />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p
-                        className="text-sm font-semibold truncate"
-                        style={{ color: Colors.textPrimary }}
-                      >
-                        {r.label}
-                      </p>
-                      <p className="text-xs truncate" style={{ color: Colors.textMuted }}>
-                        {r.isGroup ? "Group" : "+91"} {r.number}
-                      </p>
-                    </div>
-                    <button
-                      onClick={() =>
-                        setWaRecipients((prev) =>
-                          prev.map((x) => (x.id === r.id ? { ...x, active: !x.active } : x)),
-                        )
-                      }
-                      style={{ color: r.active ? Colors.primary : Colors.textMuted }}
-                    >
-                      {r.active ? (
-                        <ToggleRight size={30} strokeWidth={1.5} />
-                      ) : (
-                        <ToggleLeft size={30} strokeWidth={1.5} />
-                      )}
-                    </button>
-                    <button
-                      onClick={() => handleRemoveRecipient(r.id)}
-                      className="p-1.5 rounded-xl transition-colors"
-                      style={{ color: Colors.textMuted }}
-                      onMouseEnter={(e) => {
-                        (e.currentTarget as HTMLElement).style.color = Colors.error;
-                        (e.currentTarget as HTMLElement).style.background = "#FFF0F3";
-                      }}
-                      onMouseLeave={(e) => {
-                        (e.currentTarget as HTMLElement).style.color = Colors.textMuted;
-                        (e.currentTarget as HTMLElement).style.background = "transparent";
-                      }}
-                    >
-                      <Trash2 size={16} strokeWidth={2} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-
-              {showAddRecipient && (
-                <div
-                  className="mt-3 p-4 rounded-2xl flex flex-col gap-3"
-                  style={{
-                    background: Colors.primaryLight,
-                    border: `1.5px solid ${Colors.accentLight}`,
-                  }}
-                >
-                  <p
-                    className="text-xs font-bold uppercase tracking-wide"
-                    style={{ color: Colors.accent }}
-                  >
-                    New Recipient
-                  </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div
-                      className="relative flex items-center rounded-2xl overflow-hidden"
-                      style={{ background: Colors.surface, border: `1.5px solid ${Colors.border}` }}
-                    >
-                      <div
-                        className="absolute left-3.5 pointer-events-none"
-                        style={{ color: Colors.textMuted }}
-                      >
-                        <Users size={16} strokeWidth={2} />
-                      </div>
-                      <input
-                        type="text"
-                        placeholder="Label (e.g. Delivery)"
-                        value={newRecipient.label}
-                        onChange={(e) =>
-                          setNewRecipient((p) => ({ ...p, label: e.target.value }))
-                        }
-                        className="w-full pl-10 pr-4 py-3 text-sm outline-none bg-transparent"
-                        style={{ color: Colors.textPrimary }}
-                      />
-                    </div>
-                    <div
-                      className="relative flex items-center rounded-2xl overflow-hidden"
-                      style={{ background: Colors.surface, border: `1.5px solid ${Colors.border}` }}
-                    >
-                      <div
-                        className="absolute left-3.5 pointer-events-none"
-                        style={{ color: Colors.textMuted }}
-                      >
-                        <Phone size={16} strokeWidth={2} />
-                      </div>
-                      <input
-                        type="text"
-                        placeholder="Phone or Group ID"
-                        value={newRecipient.number}
-                        onChange={(e) =>
-                          setNewRecipient((p) => ({ ...p, number: e.target.value }))
-                        }
-                        className="w-full pl-10 pr-4 py-3 text-sm outline-none bg-transparent"
-                        style={{ color: Colors.textPrimary }}
-                      />
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <label
-                      className="flex items-center gap-2 cursor-pointer text-sm"
-                      style={{ color: Colors.textSecondary }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={newRecipient.isGroup}
-                        onChange={(e) =>
-                          setNewRecipient((p) => ({ ...p, isGroup: e.target.checked }))
-                        }
-                        className="w-4 h-4 rounded accent-primary"
-                      />
-                      This is a WhatsApp Group
-                    </label>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => setShowAddRecipient(false)}
-                        className="px-4 py-2 rounded-xl text-xs font-semibold"
-                        style={{
-                          background: Colors.surface,
-                          color: Colors.textSecondary,
-                          border: `1px solid ${Colors.border}`,
-                        }}
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        onClick={handleAddRecipient}
-                        className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold"
-                        style={{
-                          background: `linear-gradient(135deg, ${Colors.gradientStart}, ${Colors.gradientEnd})`,
-                          color: Colors.white,
-                        }}
-                      >
-                        <Plus size={14} strokeWidth={2.5} /> Add
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <p
-                className="text-xs font-bold uppercase tracking-wide mb-1"
-                style={{ color: Colors.textMuted }}
-              >
-                Share Preferences
-              </p>
-              {[
-                {
-                  key: "sendOnOrderPlaced",
-                  label: "Share on New Order",
-                  desc: "Send message when a new order is placed",
-                },
-                {
-                  key: "sendOnOrderAltered",
-                  label: "Share on Order Altered",
-                  desc: "Notify when admin modifies order quantities",
-                },
-                {
-                  key: "sendOnDispatched",
-                  label: "Share on Dispatch",
-                  desc: "Send when order is marked dispatched",
-                },
-                {
-                  key: "includeLocation",
-                  label: "Include Google Maps Link",
-                  desc: "Attach customer's location in every message",
-                },
-                {
-                  key: "includeGstDetails",
-                  label: "Include GST Details",
-                  desc: "Attach GST number if available",
-                },
-              ].map(({ key, label, desc }) => (
-                <ToggleRow
-                  key={key}
-                  label={label}
-                  description={desc}
-                  value={waSettings[key as keyof typeof waSettings]}
-                  onChange={(v) => setWaSettings((p) => ({ ...p, [key]: v }))}
-                />
-              ))}
-            </div>
-
-            <div className="flex justify-end">
-              <SaveBtn
-                loading={!!loading["wa"]}
-                onClick={() => save("wa", "WhatsApp settings saved!")}
-              />
-            </div>
-          </div>
-        </SectionCard> */}
-
-        {/* ══════════════════════════════════════
-            3. PUSH NOTIFICATION TEMPLATES
-        ══════════════════════════════════════ */}
-        {/* <SectionCard
-          icon={Bell}
-          title="Push Notification Templates"
-          subtitle="Customize in-app notification messages for each event"
-        >
-          <div className="flex flex-col gap-3">
-            <p
-              className="text-xs px-3 py-2 rounded-xl"
-              style={{
-                background: Colors.primaryLight,
-                color: Colors.textSecondary,
-              }}
-            >
-              Available variables:{" "}
-              <span
-                className="font-mono font-semibold"
-                style={{ color: Colors.primary }}
-              >
-                {"{{orderNo}}"}
-              </span>{" "}
-              ·{" "}
-              <span
-                className="font-mono font-semibold"
-                style={{ color: Colors.primary }}
-              >
-                {"{{customerName}}"}
-              </span>{" "}
-              ·{" "}
-              <span
-                className="font-mono font-semibold"
-                style={{ color: Colors.primary }}
-              >
-                {"{{total}}"}
-              </span>{" "}
-              ·{" "}
-              <span
-                className="font-mono font-semibold"
-                style={{ color: Colors.primary }}
-              >
-                {"{{productName}}"}
-              </span>{" "}
-              ·{" "}
-              <span
-                className="font-mono font-semibold"
-                style={{ color: Colors.primary }}
-              >
-                {"{{qty}}"}
-              </span>
-            </p>
-
-            {templates.map((t) => (
+            {/* Title */}
+            <FieldRow label="Notification Title *">
               <div
-                key={t.id}
-                className="rounded-2xl overflow-hidden"
+                className="relative flex items-center rounded-2xl overflow-hidden transition-all duration-200"
                 style={{
-                  border: `1.5px solid ${t.active ? Colors.border : Colors.divider}`,
-                  opacity: t.active ? 1 : 0.65,
+                  background:
+                    focused === "pushTitle"
+                      ? Colors.primaryLight
+                      : Colors.surfaceAlt,
+                  border: `1.5px solid ${focused === "pushTitle" ? Colors.borderFocus : Colors.border}`,
                 }}
               >
                 <div
-                  className="flex items-center justify-between px-4 py-3"
+                  className="absolute left-3.5 pointer-events-none"
                   style={{
-                    background: Colors.surfaceAlt,
-                    borderBottom: `1px solid ${Colors.divider}`,
+                    color:
+                      focused === "pushTitle"
+                        ? Colors.primary
+                        : Colors.textMuted,
                   }}
                 >
-                  <div className="flex items-center gap-2">
-                    <Bell
-                      size={15}
-                      color={t.active ? Colors.primary : Colors.textMuted}
-                      strokeWidth={2}
-                    />
-                    <p
-                      className="text-sm font-semibold"
-                      style={{ color: Colors.textPrimary }}
-                    >
-                      {t.event}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {editingTemplate === t.id ? (
-                      <>
-                        <button
-                          onClick={() => handleSaveTemplate(t.id)}
-                          className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold"
-                          style={{
-                            background: `linear-gradient(135deg, ${Colors.gradientStart}, ${Colors.gradientEnd})`,
-                            color: Colors.white,
-                          }}
+                  <Bell size={17} strokeWidth={2} />
+                </div>
+                <input
+                  type="text"
+                  value={pushForm.title}
+                  onChange={(e) =>
+                    setPushForm((p) => ({ ...p, title: e.target.value }))
+                  }
+                  onFocus={() => setFocused("pushTitle")}
+                  onBlur={() => setFocused("")}
+                  placeholder="e.g., 🎉 New Arrivals Are Here!"
+                  className="w-full pl-10 pr-4 py-3.5 text-sm outline-none bg-transparent"
+                  style={{ color: Colors.textPrimary }}
+                  maxLength={100}
+                />
+              </div>
+              <span className="text-xs" style={{ color: Colors.textMuted }}>
+                {pushForm.title.length}/100 characters
+              </span>
+            </FieldRow>
+
+            {/* Message Body */}
+            <FieldRow label="Message Body *">
+              <div
+                className="relative rounded-2xl overflow-hidden transition-all duration-200"
+                style={{
+                  background:
+                    focused === "pushBody"
+                      ? Colors.primaryLight
+                      : Colors.surfaceAlt,
+                  border: `1.5px solid ${focused === "pushBody" ? Colors.borderFocus : Colors.border}`,
+                }}
+              >
+                <textarea
+                  rows={3}
+                  value={pushForm.body}
+                  onChange={(e) =>
+                    setPushForm((p) => ({ ...p, body: e.target.value }))
+                  }
+                  onFocus={() => setFocused("pushBody")}
+                  onBlur={() => setFocused("")}
+                  placeholder="Write your notification message here..."
+                  className="w-full px-4 py-3.5 text-sm outline-none resize-none bg-transparent"
+                  style={{ color: Colors.textPrimary }}
+                  maxLength={200}
+                />
+              </div>
+              <span className="text-xs" style={{ color: Colors.textMuted }}>
+                {pushForm.body.length}/200 characters
+              </span>
+            </FieldRow>
+
+            {/* Target Audience */}
+            <FieldRow label="Target Audience">
+              <div className="flex flex-wrap gap-2">
+                {[
+                  {
+                    value: "all",
+                    label: "All Customers",
+                    icon: Users,
+                    color: Colors.primary,
+                  },
+                  {
+                    value: "pending",
+                    label: "Pending Approval",
+                    icon: AlertTriangle,
+                    color: "#D97706",
+                  },
+                  {
+                    value: "approved",
+                    label: "Approved Only",
+                    icon: CheckCircle2,
+                    color: "#059669",
+                  },
+                  {
+                    value: "specific",
+                    label: "Specific Users",
+                    icon: Smartphone,
+                    color: "#6C5CE7",
+                  },
+                ].map(({ value, label, icon: Icon, color }) => (
+                  <button
+                    key={value}
+                    onClick={() => {
+                      setPushForm((p) => ({
+                        ...p,
+                        targetType: value as any,
+                        selectedUsers:
+                          value === "specific" ? p.selectedUsers : [],
+                      }));
+                      setShowUserDropdown(value === "specific");
+                    }}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-semibold transition-all duration-150"
+                    style={{
+                      background:
+                        pushForm.targetType === value
+                          ? color
+                          : Colors.surfaceAlt,
+                      color:
+                        pushForm.targetType === value
+                          ? Colors.white
+                          : Colors.textSecondary,
+                      border: `1.5px solid ${pushForm.targetType === value ? "transparent" : Colors.border}`,
+                    }}
+                  >
+                    <Icon size={14} strokeWidth={2} />
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs mt-2" style={{ color: Colors.textMuted }}>
+                {getTargetDescription()}
+              </p>
+            </FieldRow>
+
+            {/* Specific User Selection */}
+            {pushForm.targetType === "specific" && (
+              <FieldRow label="Select Users">
+                <div className="relative">
+                  <button
+                    onClick={() => setShowUserDropdown(!showUserDropdown)}
+                    className="w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm transition-all duration-200"
+                    style={{
+                      background: showUserDropdown
+                        ? Colors.primaryLight
+                        : Colors.surfaceAlt,
+                      border: `1.5px solid ${showUserDropdown ? Colors.borderFocus : Colors.border}`,
+                      color: Colors.textPrimary,
+                    }}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Users size={16} style={{ color: Colors.textMuted }} />
+                      <span>
+                        {pushForm.selectedUsers.length > 0
+                          ? `${pushForm.selectedUsers.length} user(s) selected`
+                          : "Click to select users..."}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {customersLoading && (
+                        <svg
+                          className="animate-spin"
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
                         >
-                          <CheckCircle2 size={13} strokeWidth={2.5} /> Save
-                        </button>
-                        <button
-                          onClick={() => setEditingTemplate(null)}
-                          style={{ color: Colors.textMuted }}
-                        >
-                          <X size={16} />
-                        </button>
-                      </>
-                    ) : (
-                      <button
-                        onClick={() => {
-                          setEditingTemplate(t.id);
-                          setTemplateDraft(t.message);
+                          <circle
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke={Colors.border}
+                            strokeWidth="3"
+                          />
+                          <path
+                            d="M12 2a10 10 0 0 1 10 10"
+                            stroke={Colors.primary}
+                            strokeWidth="3"
+                            strokeLinecap="round"
+                          />
+                        </svg>
+                      )}
+                      <ChevronDown
+                        size={16}
+                        style={{
+                          color: Colors.textMuted,
+                          transform: showUserDropdown
+                            ? "rotate(180deg)"
+                            : "none",
+                          transition: "transform 0.2s",
                         }}
-                        className="p-1.5 rounded-xl transition-colors"
-                        style={{ color: Colors.textMuted }}
-                        onMouseEnter={(e) => {
-                          (e.currentTarget as HTMLElement).style.color =
-                            Colors.primary;
-                          (e.currentTarget as HTMLElement).style.background =
-                            Colors.primaryLight;
-                        }}
-                        onMouseLeave={(e) => {
-                          (e.currentTarget as HTMLElement).style.color =
-                            Colors.textMuted;
-                          (e.currentTarget as HTMLElement).style.background =
-                            "transparent";
+                      />
+                    </div>
+                  </button>
+
+                  {showUserDropdown && (
+                    <>
+                      <div
+                        className="fixed inset-0 z-10"
+                        onClick={() => setShowUserDropdown(false)}
+                      />
+                      <div
+                        className="absolute z-20 mt-1 w-full rounded-2xl shadow-xl overflow-hidden"
+                        style={{
+                          background: Colors.surface,
+                          border: `1px solid ${Colors.border}`,
                         }}
                       >
-                        <ChevronRight size={16} strokeWidth={2} />
-                      </button>
-                    )}
-                    <button
-                      onClick={() =>
-                        setTemplates((prev) =>
-                          prev.map((x) =>
-                            x.id === t.id ? { ...x, active: !x.active } : x,
-                          ),
-                        )
-                      }
-                      style={{
-                        color: t.active ? Colors.primary : Colors.textMuted,
-                      }}
-                    >
-                      {t.active ? (
-                        <ToggleRight size={28} strokeWidth={1.5} />
-                      ) : (
-                        <ToggleLeft size={28} strokeWidth={1.5} />
-                      )}
-                    </button>
-                  </div>
-                </div>
-                <div className="px-4 py-3">
-                  {editingTemplate === t.id ? (
-                    <textarea
-                      rows={2}
-                      value={templateDraft}
-                      onChange={(e) => setTemplateDraft(e.target.value)}
-                      className="w-full text-sm outline-none resize-none rounded-xl px-3 py-2.5"
-                      style={{
-                        background: Colors.primaryLight,
-                        border: `1.5px solid ${Colors.borderFocus}`,
-                        color: Colors.textPrimary,
-                      }}
-                      autoFocus
-                    />
-                  ) : (
-                    <p
-                      className="text-sm leading-relaxed"
-                      style={{ color: Colors.textSecondary }}
-                    >
-                      {t.message}
-                    </p>
+                        {/* Search */}
+                        <div
+                          className="p-3"
+                          style={{
+                            borderBottom: `1px solid ${Colors.divider}`,
+                          }}
+                        >
+                          <div className="relative">
+                            <Search
+                              size={14}
+                              className="absolute left-3 top-1/2 -translate-y-1/2"
+                              style={{ color: Colors.textMuted }}
+                            />
+                            <input
+                              type="text"
+                              placeholder="Search by name or phone number..."
+                              value={customerSearch}
+                              onChange={(e) =>
+                                setCustomerSearch(e.target.value)
+                              }
+                              className="w-full pl-9 pr-8 py-2.5 rounded-xl text-sm outline-none"
+                              style={{
+                                background: Colors.surfaceAlt,
+                                border: `1px solid ${Colors.border}`,
+                                color: Colors.textPrimary,
+                              }}
+                              autoFocus
+                            />
+                            {customerSearch && (
+                              <button
+                                onClick={() => setCustomerSearch("")}
+                                className="absolute right-2 top-1/2 -translate-y-1/2"
+                                style={{ color: Colors.textMuted }}
+                              >
+                                <X size={14} />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Stats bar */}
+                        <div
+                          className="flex items-center justify-between px-4 py-2"
+                          style={{ background: Colors.surfaceAlt }}
+                        >
+                          <p
+                            className="text-xs"
+                            style={{ color: Colors.textMuted }}
+                          >
+                            {filteredCustomers.length} user(s) found
+                            {selectedFromFiltered > 0 &&
+                              ` · ${selectedFromFiltered} selected`}
+                          </p>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={handleSelectAllFiltered}
+                              className="text-xs font-semibold px-2 py-1 rounded-lg"
+                              style={{ color: Colors.primary }}
+                            >
+                              Select All
+                            </button>
+                            <button
+                              onClick={handleClearFiltered}
+                              className="text-xs font-semibold px-2 py-1 rounded-lg"
+                              style={{ color: Colors.error }}
+                            >
+                              Clear
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* User List */}
+                        <div className="overflow-y-auto max-h-52">
+                          {customersLoading ? (
+                            <div className="flex items-center justify-center py-8 gap-2">
+                              <svg
+                                className="animate-spin"
+                                width="20"
+                                height="20"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                              >
+                                <circle
+                                  cx="12"
+                                  cy="12"
+                                  r="10"
+                                  stroke={Colors.border}
+                                  strokeWidth="3"
+                                />
+                                <path
+                                  d="M12 2a10 10 0 0 1 10 10"
+                                  stroke={Colors.primary}
+                                  strokeWidth="3"
+                                  strokeLinecap="round"
+                                />
+                              </svg>
+                              <span
+                                className="text-sm"
+                                style={{ color: Colors.textMuted }}
+                              >
+                                Loading customers...
+                              </span>
+                            </div>
+                          ) : filteredCustomers.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center py-8 gap-2">
+                              <Users
+                                size={24}
+                                style={{ color: Colors.border }}
+                              />
+                              <p
+                                className="text-sm"
+                                style={{ color: Colors.textMuted }}
+                              >
+                                {customerSearch
+                                  ? "No users match your search"
+                                  : "No customers found"}
+                              </p>
+                              {customerSearch && (
+                                <button
+                                  onClick={() => setCustomerSearch("")}
+                                  className="text-xs font-semibold px-3 py-1 rounded-lg"
+                                  style={{
+                                    color: Colors.primary,
+                                    background: Colors.primaryLight,
+                                  }}
+                                >
+                                  Clear Search
+                                </button>
+                              )}
+                            </div>
+                          ) : (
+                            filteredCustomers.map((customer) => {
+                              const isSelected =
+                                pushForm.selectedUsers.includes(customer._id);
+                              const approvalBadge =
+                                customer.approvalStatus === "approved" ||
+                                customer.approvalStatus === "auto"
+                                  ? {
+                                      color: "#059669",
+                                      bg: "#D1FAE5",
+                                      label: "Approved",
+                                    }
+                                  : customer.approvalStatus === "rejected"
+                                    ? {
+                                        color: "#DC2626",
+                                        bg: "#FEE2E2",
+                                        label: "Rejected",
+                                      }
+                                    : {
+                                        color: "#D97706",
+                                        bg: "#FEF3C7",
+                                        label: "Pending",
+                                      };
+
+                              return (
+                                <label
+                                  key={customer._id}
+                                  className="flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors"
+                                  style={{
+                                    background: isSelected
+                                      ? Colors.primaryLight
+                                      : "transparent",
+                                    borderBottom: `1px solid ${Colors.divider}`,
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    if (!isSelected)
+                                      (
+                                        e.currentTarget as HTMLElement
+                                      ).style.background = Colors.surfaceAlt;
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    if (!isSelected)
+                                      (
+                                        e.currentTarget as HTMLElement
+                                      ).style.background = "transparent";
+                                  }}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setPushForm((p) => ({
+                                          ...p,
+                                          selectedUsers: [
+                                            ...p.selectedUsers,
+                                            customer._id,
+                                          ],
+                                        }));
+                                      } else {
+                                        setPushForm((p) => ({
+                                          ...p,
+                                          selectedUsers: p.selectedUsers.filter(
+                                            (id) => id !== customer._id,
+                                          ),
+                                        }));
+                                      }
+                                    }}
+                                    className="w-4 h-4 rounded accent-[#00A884] flex-shrink-0"
+                                  />
+                                  <div
+                                    className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0"
+                                    style={{
+                                      background: `linear-gradient(135deg, ${Colors.gradientStart}, ${Colors.gradientEnd})`,
+                                    }}
+                                  >
+                                    {(customer.profile?.contactName || "U")
+                                      .charAt(0)
+                                      .toUpperCase()}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p
+                                      className="text-sm font-medium truncate"
+                                      style={{ color: Colors.textPrimary }}
+                                    >
+                                      {customer.profile?.contactName ||
+                                        `User ${customer.phone.slice(-4)}`}
+                                    </p>
+                                    <p
+                                      className="text-xs"
+                                      style={{ color: Colors.textMuted }}
+                                    >
+                                      +91 {customer.phone}
+                                    </p>
+                                  </div>
+                                  <span
+                                    className="text-xs px-2 py-0.5 rounded-lg font-medium flex-shrink-0"
+                                    style={{
+                                      background: approvalBadge.bg,
+                                      color: approvalBadge.color,
+                                    }}
+                                  >
+                                    {approvalBadge.label}
+                                  </span>
+                                  <div
+                                    className="w-2 h-2 rounded-full flex-shrink-0"
+                                    style={{
+                                      background: customer.isActive
+                                        ? Colors.success
+                                        : Colors.error,
+                                    }}
+                                    title={
+                                      customer.isActive ? "Active" : "Inactive"
+                                    }
+                                  />
+                                </label>
+                              );
+                            })
+                          )}
+                        </div>
+
+                        {/* Footer */}
+                        {pushForm.selectedUsers.length > 0 && (
+                          <div
+                            className="flex items-center justify-between px-4 py-2.5"
+                            style={{
+                              borderTop: `1px solid ${Colors.divider}`,
+                              background: Colors.primaryLight,
+                            }}
+                          >
+                            <p
+                              className="text-xs font-semibold"
+                              style={{ color: Colors.primary }}
+                            >
+                              {pushForm.selectedUsers.length} user(s) selected
+                            </p>
+                            <button
+                              onClick={() =>
+                                setPushForm((p) => ({
+                                  ...p,
+                                  selectedUsers: [],
+                                }))
+                              }
+                              className="text-xs font-semibold px-3 py-1 rounded-lg"
+                              style={{
+                                color: Colors.error,
+                                background: "#FFF0F3",
+                              }}
+                            >
+                              Clear All
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </>
                   )}
                 </div>
+              </FieldRow>
+            )}
+
+            {/* Navigation Screen */}
+            <FieldRow label="Navigate To Screen (Optional)">
+              <div
+                className="relative flex items-center rounded-2xl overflow-hidden transition-all duration-200"
+                style={{
+                  background:
+                    focused === "pushScreen"
+                      ? Colors.primaryLight
+                      : Colors.surfaceAlt,
+                  border: `1.5px solid ${focused === "pushScreen" ? Colors.borderFocus : Colors.border}`,
+                }}
+              >
+                <div
+                  className="absolute left-3.5 pointer-events-none"
+                  style={{
+                    color:
+                      focused === "pushScreen"
+                        ? Colors.primary
+                        : Colors.textMuted,
+                  }}
+                >
+                  <Smartphone size={17} strokeWidth={2} />
+                </div>
+                <select
+                  value={pushForm.screen}
+                  onChange={(e) =>
+                    setPushForm((p) => ({ ...p, screen: e.target.value }))
+                  }
+                  onFocus={() => setFocused("pushScreen")}
+                  onBlur={() => setFocused("")}
+                  className="w-full pl-10 pr-4 py-3.5 text-sm outline-none bg-transparent appearance-none cursor-pointer"
+                  style={{ color: Colors.textPrimary }}
+                >
+                  <option value="">No specific screen</option>
+                  <option value="/(tabs)/home">Home Screen</option>
+                  <option value="/(tabs)/products">Products Screen</option>
+                  <option value="/(tabs)/myorders">My Orders</option>
+                  <option value="/(tabs)/account">Account Screen</option>
+                  <option value="/cart">Cart</option>
+                </select>
               </div>
-            ))}
+            </FieldRow>
+
+            {/* Preview */}
+            {pushPreview && pushForm.title && pushForm.body && (
+              <div
+                className="rounded-2xl p-4"
+                style={{
+                  background: Colors.primaryLight,
+                  border: `1.5px solid ${Colors.accentLight}`,
+                }}
+              >
+                <p
+                  className="text-xs font-bold uppercase tracking-wide mb-2"
+                  style={{ color: Colors.accent }}
+                >
+                  📱 Preview
+                </p>
+                <div
+                  className="rounded-xl p-3 mb-2"
+                  style={{
+                    background: Colors.white,
+                    border: `1px solid ${Colors.border}`,
+                  }}
+                >
+                  <p
+                    className="text-sm font-bold"
+                    style={{ color: Colors.textPrimary }}
+                  >
+                    {pushForm.title}
+                  </p>
+                  <p
+                    className="text-xs mt-1"
+                    style={{ color: Colors.textSecondary }}
+                  >
+                    {pushForm.body}
+                  </p>
+                </div>
+                <p className="text-xs" style={{ color: Colors.textMuted }}>
+                  Target: {getTargetDescription()}
+                </p>
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="flex items-center justify-between">
+              <button
+                onClick={() => setPushPreview(!pushPreview)}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all duration-150"
+                style={{
+                  background: Colors.surfaceAlt,
+                  color: Colors.textSecondary,
+                  border: `1.5px solid ${Colors.border}`,
+                }}
+              >
+                <Eye size={16} strokeWidth={2} />
+                {pushPreview ? "Hide Preview" : "Preview"}
+              </button>
+
+              <button
+                onClick={handleSendPush}
+                disabled={
+                  pushSending || !pushForm.title.trim() || !pushForm.body.trim()
+                }
+                className="flex items-center gap-2 px-6 py-2.5 rounded-2xl text-sm font-semibold transition-all duration-200"
+                style={{
+                  background: `linear-gradient(135deg, ${Colors.gradientStart}, ${Colors.gradientEnd})`,
+                  color: Colors.white,
+                  boxShadow: `0 4px 14px rgba(0,168,132,0.3)`,
+                  opacity:
+                    pushSending ||
+                    !pushForm.title.trim() ||
+                    !pushForm.body.trim()
+                      ? 0.7
+                      : 1,
+                  cursor:
+                    pushSending ||
+                    !pushForm.title.trim() ||
+                    !pushForm.body.trim()
+                      ? "not-allowed"
+                      : "pointer",
+                }}
+              >
+                {pushSending ? (
+                  <>
+                    <svg
+                      className="animate-spin"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                    >
+                      <circle
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="rgba(255,255,255,0.3)"
+                        strokeWidth="3"
+                      />
+                      <path
+                        d="M12 2a10 10 0 0 1 10 10"
+                        stroke="white"
+                        strokeWidth="3"
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                    Sending…
+                  </>
+                ) : (
+                  <>
+                    <Send size={16} strokeWidth={2} />
+                    Send Notification
+                  </>
+                )}
+              </button>
+            </div>
           </div>
-        </SectionCard> */}
+        </SectionCard>
 
         {/* ══════════════════════════════════════
-            4. ADMIN CREDENTIALS
+             ADMIN CREDENTIALS
         ══════════════════════════════════════ */}
         <SectionCard
           icon={ShieldCheck}
@@ -833,8 +1242,6 @@ export default function SettingsPage() {
           subtitle="Update login email and password"
         >
           <div className="flex flex-col gap-5">
-            {/* ── EMAIL SECTION ── */}
-            {/* Current email (readonly) */}
             <FieldRow label="Current Email">
               <InputField
                 icon={Mail}
@@ -846,7 +1253,6 @@ export default function SettingsPage() {
               />
             </FieldRow>
 
-            {/* New email */}
             <FieldRow label="New Email">
               <InputField
                 icon={Mail}
@@ -860,7 +1266,6 @@ export default function SettingsPage() {
               />
             </FieldRow>
 
-            {/* Password confirmation for email change — its own dedicated field */}
             <FieldRow label="Current Password (to confirm email change)">
               <div
                 className="relative flex items-center rounded-2xl overflow-hidden transition-all duration-200"
@@ -929,7 +1334,6 @@ export default function SettingsPage() {
               style={{ borderTop: `1px solid ${Colors.divider}` }}
             />
 
-            {/* ── PASSWORD SECTION ── */}
             <p
               className="text-xs font-bold uppercase tracking-wide"
               style={{ color: Colors.textMuted }}
@@ -1017,7 +1421,7 @@ export default function SettingsPage() {
         </SectionCard>
 
         {/* ══════════════════════════════════════
-            5. DANGER ZONE
+             DANGER ZONE
         ══════════════════════════════════════ */}
         <div
           className="rounded-3xl overflow-hidden"

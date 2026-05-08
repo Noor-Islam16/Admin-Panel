@@ -5,13 +5,17 @@ import {
   Search,
   Phone,
   MapPin,
-  FileText,
-  UserX,
   AlertTriangle,
   X,
   Loader2,
   RefreshCw,
   CheckCircle2,
+  Eye,
+  UserCheck,
+  UserMinus,
+  Ban,
+  ShieldCheck,
+  Clock,
 } from "lucide-react";
 import Colors from "../constants/colors";
 
@@ -21,7 +25,7 @@ interface Customer {
   phone: string;
   role: string;
   isProfileComplete: boolean;
-  approvalStatus: string;
+  approvalStatus: "auto" | "manual" | "approved" | "rejected" | "pending";
   isActive: boolean;
   profile?: {
     contactName?: string;
@@ -31,13 +35,15 @@ interface Customer {
     state?: string;
     pincode?: string;
     gstNumber?: string;
+    latitude?: number | null;
+    longitude?: number | null;
   };
   createdAt: string;
 }
 
 // ─── API Config ──────────────────────────────────────────────────────────────
-// ✅ Using localhost since admin panel runs in browser on same machine
 const API_BASE = "https://customer-7bcb.onrender.com";
+// const API_BASE = "http://localhost:5000";
 
 const getAuthToken = (): string | null => {
   return localStorage.getItem("token") ?? localStorage.getItem("adminToken");
@@ -45,10 +51,6 @@ const getAuthToken = (): string | null => {
 
 const apiFetch = async (path: string, options: RequestInit = {}) => {
   const token = getAuthToken();
-
-  console.log(`📡 ${options.method || "GET"} ${API_BASE}${path}`);
-  console.log(`🔑 Token: ${token ? "Present" : "Missing"}`);
-
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -56,7 +58,6 @@ const apiFetch = async (path: string, options: RequestInit = {}) => {
   };
 
   const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
-
   let data: any;
   const contentType = res.headers.get("content-type") || "";
 
@@ -69,7 +70,6 @@ const apiFetch = async (path: string, options: RequestInit = {}) => {
   }
 
   if (!res.ok) {
-    console.error("❌ API Error:", res.status, data);
     throw new Error(data.message || `Request failed with status ${res.status}`);
   }
 
@@ -102,24 +102,67 @@ const formatPhone = (phone: string): string => {
   return `+91 ${phone}`;
 };
 
+const formatDate = (dateStr: string): string => {
+  return new Date(dateStr).toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+};
+
+const getApprovalStatusBadge = (status: string) => {
+  const configs: Record<
+    string,
+    { label: string; color: string; bg: string; icon: React.ElementType }
+  > = {
+    auto: {
+      label: "Auto Approved",
+      color: "#059669",
+      bg: "#d1fae5",
+      icon: ShieldCheck,
+    },
+    approved: {
+      label: "Approved",
+      color: "#059669",
+      bg: "#d1fae5",
+      icon: CheckCircle2,
+    },
+    pending: { label: "Pending", color: "#D97706", bg: "#FEF3C7", icon: Clock },
+    manual: {
+      label: "Manual Review",
+      color: "#D97706",
+      bg: "#FEF3C7",
+      icon: Clock,
+    },
+    rejected: { label: "Rejected", color: "#DC2626", bg: "#FEE2E2", icon: Ban },
+  };
+  return configs[status] || configs.pending;
+};
+
 // ─── Toast Component ──────────────────────────────────────────────────────────
 const Toast = ({
+  type = "success",
   message,
   onClose,
 }: {
+  type?: "success" | "error";
   message: string;
   onClose: () => void;
 }) => (
   <div
     className="fixed bottom-6 right-6 z-50 flex items-center gap-3 px-5 py-3.5 rounded-2xl text-sm font-semibold shadow-xl"
     style={{
-      background: Colors.primaryLight,
-      color: Colors.accent,
-      border: `1px solid ${Colors.accentLight}`,
+      background: type === "success" ? Colors.primaryLight : "#FFF0F3",
+      color: type === "success" ? Colors.accent : Colors.error,
+      border: `1px solid ${type === "success" ? Colors.accentLight : "#FFD0DA"}`,
       animation: "slideUp 0.3s ease",
     }}
   >
-    <CheckCircle2 size={18} />
+    {type === "success" ? (
+      <CheckCircle2 size={18} />
+    ) : (
+      <AlertTriangle size={18} />
+    )}
     {message}
     <button onClick={onClose}>
       <X size={16} />
@@ -127,14 +170,218 @@ const Toast = ({
   </div>
 );
 
-// ── Confirm Deactivate Modal ──────────────────────────────────────────────────
-function DeactivateModal({
+// ── View Customer Details Modal ───────────────────────────────────────────────
+function ViewCustomerModal({
   customer,
+  onClose,
+}: {
+  customer: Customer;
+  onClose: () => void;
+}) {
+  const approvalCfg = getApprovalStatusBadge(customer.approvalStatus);
+  const ApprovalIcon = approvalCfg.icon;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: Colors.overlay }}
+    >
+      <div
+        className="w-full max-w-lg rounded-3xl overflow-hidden"
+        style={{
+          background: Colors.surface,
+          boxShadow: "0 24px 64px rgba(0,0,0,0.22)",
+          maxHeight: "85vh",
+          overflowY: "auto",
+        }}
+      >
+        {/* Header */}
+        <div
+          className="flex items-center justify-between px-6 py-5"
+          style={{
+            background: `linear-gradient(135deg, ${Colors.gradientStart}, ${Colors.gradientEnd})`,
+          }}
+        >
+          <div className="flex items-center gap-2">
+            <Eye size={18} color={Colors.white} strokeWidth={2} />
+            <p className="text-base font-bold text-white">Customer Details</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-xl"
+            style={{
+              background: "rgba(255,255,255,0.18)",
+              color: Colors.white,
+            }}
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="p-6 flex flex-col gap-4">
+          {/* Customer Info */}
+          <div className="flex items-center gap-4">
+            <div
+              className="w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-bold text-white"
+              style={{
+                background: `linear-gradient(135deg, ${Colors.gradientStart}, ${Colors.gradientEnd})`,
+              }}
+            >
+              {getCustomerName(customer).charAt(0)}
+            </div>
+            <div>
+              <h2
+                className="text-lg font-bold"
+                style={{ color: Colors.textPrimary }}
+              >
+                {getCustomerName(customer)}
+              </h2>
+              <div className="flex items-center gap-1.5">
+                <Phone size={14} color={Colors.primary} />
+                <span
+                  className="text-sm"
+                  style={{ color: Colors.textSecondary }}
+                >
+                  {formatPhone(customer.phone)}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Status Badges */}
+          <div className="flex flex-wrap gap-2">
+            <span
+              className="text-xs px-2.5 py-1 rounded-xl font-semibold flex items-center gap-1"
+              style={{ background: approvalCfg.bg, color: approvalCfg.color }}
+            >
+              <ApprovalIcon size={12} strokeWidth={2.5} />
+              {approvalCfg.label}
+            </span>
+            <span
+              className="text-xs px-2.5 py-1 rounded-xl font-semibold"
+              style={{
+                background: customer.isActive ? "#E8F5E9" : "#FFF0F3",
+                color: customer.isActive ? "#4CAF50" : "#E53935",
+              }}
+            >
+              {customer.isActive ? "Active" : "Inactive"}
+            </span>
+          </div>
+
+          <div style={{ height: 1, background: Colors.divider }} />
+
+          {/* Address */}
+          <div>
+            <p
+              className="text-xs font-bold uppercase tracking-wide mb-2"
+              style={{ color: Colors.textMuted }}
+            >
+              Delivery Address
+            </p>
+            <div className="flex items-start gap-2">
+              <MapPin size={16} color={Colors.primary} className="mt-0.5" />
+              <p
+                className="text-sm leading-relaxed"
+                style={{ color: Colors.textSecondary }}
+              >
+                {getCustomerAddress(customer)}
+              </p>
+            </div>
+          </div>
+
+          {/* GST */}
+          <div>
+            <p
+              className="text-xs font-bold uppercase tracking-wide mb-1"
+              style={{ color: Colors.textMuted }}
+            >
+              GST Number
+            </p>
+            <p
+              className="text-sm font-mono"
+              style={{
+                color: customer.profile?.gstNumber
+                  ? Colors.info
+                  : Colors.textMuted,
+              }}
+            >
+              {customer.profile?.gstNumber || "Not provided"}
+            </p>
+          </div>
+
+          {/* Location */}
+          {customer.profile?.latitude && customer.profile?.longitude && (
+            <div>
+              <p
+                className="text-xs font-bold uppercase tracking-wide mb-1"
+                style={{ color: Colors.textMuted }}
+              >
+                GPS Location
+              </p>
+              <p
+                className="text-sm font-mono"
+                style={{ color: Colors.textSecondary }}
+              >
+                {customer.profile.latitude.toFixed(6)},{" "}
+                {customer.profile.longitude.toFixed(6)}
+              </p>
+            </div>
+          )}
+
+          <div style={{ height: 1, background: Colors.divider }} />
+
+          {/* Timestamps */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <p
+                className="text-xs font-bold uppercase tracking-wide mb-1"
+                style={{ color: Colors.textMuted }}
+              >
+                Registered On
+              </p>
+              <p className="text-sm" style={{ color: Colors.textSecondary }}>
+                {formatDate(customer.createdAt)}
+              </p>
+            </div>
+            <div>
+              <p
+                className="text-xs font-bold uppercase tracking-wide mb-1"
+                style={{ color: Colors.textMuted }}
+              >
+                Profile Status
+              </p>
+              <p
+                className="text-sm"
+                style={{
+                  color: customer.isProfileComplete
+                    ? Colors.success
+                    : Colors.warning,
+                }}
+              >
+                {customer.isProfileComplete ? "Complete" : "Incomplete"}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Confirm Action Modal ──────────────────────────────────────────────────────
+function ConfirmModal({
+  title,
+  message,
+  confirmLabel,
+  confirmColor,
   onConfirm,
   onCancel,
   loading,
 }: {
-  customer: Customer;
+  title: string;
+  message: string;
+  confirmLabel: string;
+  confirmColor: string;
   onConfirm: () => void;
   onCancel: () => void;
   loading: boolean;
@@ -148,7 +395,7 @@ function DeactivateModal({
         className="w-full max-w-sm rounded-3xl p-6 relative"
         style={{
           background: Colors.surface,
-          boxShadow: `0 20px 60px rgba(0,0,0,0.2)`,
+          boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
         }}
       >
         <button
@@ -160,21 +407,18 @@ function DeactivateModal({
         </button>
         <div
           className="w-12 h-12 rounded-2xl flex items-center justify-center mb-4"
-          style={{ background: "#FFF0F3" }}
+          style={{ background: `${confirmColor}18` }}
         >
-          <AlertTriangle size={24} color={Colors.error} />
+          <AlertTriangle size={24} color={confirmColor} />
         </div>
         <h3
           className="text-base font-bold mb-1"
           style={{ color: Colors.textPrimary }}
         >
-          Deactivate Customer?
+          {title}
         </h3>
         <p className="text-sm mb-5" style={{ color: Colors.textSecondary }}>
-          <span className="font-semibold" style={{ color: Colors.textPrimary }}>
-            {getCustomerName(customer)}
-          </span>{" "}
-          will no longer be able to place orders.
+          {message}
         </p>
         <div className="flex gap-3">
           <button
@@ -194,13 +438,13 @@ function DeactivateModal({
             disabled={loading}
             className="flex-1 py-2.5 rounded-2xl text-sm font-semibold flex items-center justify-center gap-2"
             style={{
-              background: Colors.error,
+              background: confirmColor,
               color: "#fff",
               opacity: loading ? 0.7 : 1,
             }}
           >
             {loading && <Loader2 size={16} className="animate-spin" />}
-            Deactivate
+            {confirmLabel}
           </button>
         </div>
       </div>
@@ -215,24 +459,28 @@ export default function CustomerList() {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<Customer | null>(null);
-  const [deleting, setDeleting] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<string>("All");
+  const [viewCustomer, setViewCustomer] = useState<Customer | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{
+    type: "approve" | "reject" | "activate" | "deactivate" | "delete";
+    customer: Customer;
+  } | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [toast, setToast] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
 
   // ── Fetch Customers ────────────────────────────────────────────────────────
   const fetchCustomers = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-
-      // ✅ Correct path: /api/admin/customers
       const data = await apiFetch("/api/admin/customers?limit=200");
-
       if (data.success && data.data?.customers) {
         setCustomers(data.data.customers);
         console.log(`📦 Loaded ${data.data.customers.length} customers`);
       } else {
-        console.warn("⚠️ Unexpected response:", data);
         setCustomers([]);
       }
     } catch (err: any) {
@@ -247,47 +495,123 @@ export default function CustomerList() {
     fetchCustomers();
   }, [fetchCustomers]);
 
-  // ── Handle Deactivate ──────────────────────────────────────────────────────
-  const handleDeactivateClick = (customer: Customer) =>
-    setDeleteTarget(customer);
+  // ── Handle Actions ─────────────────────────────────────────────────────────
+  const showToast = (type: "success" | "error", message: string) => {
+    setToast({ type, message });
+    setTimeout(() => setToast(null), 3000);
+  };
 
-  const confirmDeactivate = async () => {
-    if (!deleteTarget) return;
-    setDeleting(true);
+  const handleApprove = async (customer: Customer) => {
+    setActionLoading(true);
     try {
-      // ✅ Correct path: /api/admin/customers/:id/deactivate
-      await apiFetch(`/api/admin/customers/${deleteTarget._id}/deactivate`, {
+      await apiFetch(`/api/admin/customers/${customer._id}/approve`, {
         method: "PATCH",
       });
-
-      setCustomers((prev) => prev.filter((c) => c._id !== deleteTarget._id));
-      setToast(`${getCustomerName(deleteTarget)} deactivated successfully`);
-      setDeleteTarget(null);
+      setCustomers((prev) =>
+        prev.map((c) =>
+          c._id === customer._id ? { ...c, approvalStatus: "approved" } : c,
+        ),
+      );
+      showToast("success", `${getCustomerName(customer)} approved!`);
     } catch (err: any) {
-      alert(err.message || "Failed to deactivate customer");
+      showToast("error", err.message || "Failed to approve");
     } finally {
-      setDeleting(false);
+      setActionLoading(false);
+      setConfirmAction(null);
+    }
+  };
+
+  const handleReject = async (customer: Customer) => {
+    setActionLoading(true);
+    try {
+      await apiFetch(`/api/admin/customers/${customer._id}/reject`, {
+        method: "PATCH",
+      });
+      setCustomers((prev) =>
+        prev.map((c) =>
+          c._id === customer._id
+            ? { ...c, approvalStatus: "rejected", isActive: false }
+            : c,
+        ),
+      );
+      showToast("success", `${getCustomerName(customer)} rejected!`);
+    } catch (err: any) {
+      showToast("error", err.message || "Failed to reject");
+    } finally {
+      setActionLoading(false);
+      setConfirmAction(null);
+    }
+  };
+
+  const handleToggleActive = async (customer: Customer) => {
+    const newActive = !customer.isActive;
+    setActionLoading(true);
+    try {
+      const endpoint = newActive ? "activate" : "deactivate";
+      await apiFetch(`/api/admin/customers/${customer._id}/${endpoint}`, {
+        method: "PATCH",
+      });
+      setCustomers((prev) =>
+        prev.map((c) =>
+          c._id === customer._id ? { ...c, isActive: newActive } : c,
+        ),
+      );
+      showToast(
+        "success",
+        `${getCustomerName(customer)} ${newActive ? "activated" : "deactivated"}!`,
+      );
+    } catch (err: any) {
+      showToast("error", err.message || "Failed to update status");
+    } finally {
+      setActionLoading(false);
+      setConfirmAction(null);
+    }
+  };
+
+  const handleDelete = async (customer: Customer) => {
+    setActionLoading(true);
+    try {
+      await apiFetch(`/api/admin/customers/${customer._id}`, {
+        method: "DELETE",
+      });
+      setCustomers((prev) => prev.filter((c) => c._id !== customer._id));
+      showToast("success", `${getCustomerName(customer)} deleted!`);
+    } catch (err: any) {
+      showToast("error", err.message || "Failed to delete");
+    } finally {
+      setActionLoading(false);
+      setConfirmAction(null);
     }
   };
 
   // ── Filter ─────────────────────────────────────────────────────────────────
-  const filtered = customers.filter((c) => {
-    const q = search.toLowerCase();
-    return (
-      getCustomerName(c).toLowerCase().includes(q) ||
-      (c.phone || "").includes(q) ||
-      getCustomerAddress(c).toLowerCase().includes(q) ||
-      (c.profile?.gstNumber || "").toLowerCase().includes(q)
+  const filtered = customers
+    .filter((c) => {
+      const q = search.toLowerCase();
+      const matchSearch =
+        getCustomerName(c).toLowerCase().includes(q) ||
+        (c.phone || "").includes(q) ||
+        getCustomerAddress(c).toLowerCase().includes(q) ||
+        (c.profile?.gstNumber || "").toLowerCase().includes(q);
+      const matchStatus =
+        statusFilter === "All" || c.approvalStatus === statusFilter;
+      return matchSearch && matchStatus;
+    })
+    .sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     );
-  });
 
   // ── Stats ──────────────────────────────────────────────────────────────────
   const stats = {
     total: customers.length,
     active: customers.filter((c) => c.isActive).length,
-    inactive: customers.filter((c) => !c.isActive).length,
-    withGST: customers.filter((c) => c.profile?.gstNumber).length,
-    withoutGST: customers.filter((c) => !c.profile?.gstNumber).length,
+    pending: customers.filter(
+      (c) => c.approvalStatus === "pending" || c.approvalStatus === "manual",
+    ).length,
+    approved: customers.filter(
+      (c) => c.approvalStatus === "approved" || c.approvalStatus === "auto",
+    ).length,
   };
 
   // ── Loading ────────────────────────────────────────────────────────────────
@@ -323,13 +647,79 @@ export default function CustomerList() {
 
   return (
     <>
-      {toast && <Toast message={toast} onClose={() => setToast(null)} />}
-      {deleteTarget && (
-        <DeactivateModal
-          customer={deleteTarget}
-          onConfirm={confirmDeactivate}
-          onCancel={() => setDeleteTarget(null)}
-          loading={deleting}
+      {toast && (
+        <Toast
+          type={toast.type}
+          message={toast.message}
+          onClose={() => setToast(null)}
+        />
+      )}
+
+      {viewCustomer && (
+        <ViewCustomerModal
+          customer={viewCustomer}
+          onClose={() => setViewCustomer(null)}
+        />
+      )}
+
+      {confirmAction && (
+        <ConfirmModal
+          title={
+            confirmAction.type === "approve"
+              ? "Approve Customer?"
+              : confirmAction.type === "reject"
+                ? "Reject Customer?"
+                : confirmAction.type === "activate"
+                  ? "Activate Customer?"
+                  : confirmAction.type === "deactivate"
+                    ? "Deactivate Customer?"
+                    : "Delete Customer?"
+          }
+          message={
+            confirmAction.type === "approve"
+              ? `${getCustomerName(confirmAction.customer)} will be able to place orders.`
+              : confirmAction.type === "reject"
+                ? `${getCustomerName(confirmAction.customer)} will be rejected and deactivated.`
+                : confirmAction.type === "activate"
+                  ? `${getCustomerName(confirmAction.customer)} will be able to access the app again.`
+                  : confirmAction.type === "deactivate"
+                    ? `${getCustomerName(confirmAction.customer)} will no longer be able to place orders.`
+                    : `Permanently delete ${getCustomerName(confirmAction.customer)}? This cannot be undone.`
+          }
+          confirmLabel={
+            confirmAction.type === "approve"
+              ? "Approve"
+              : confirmAction.type === "reject"
+                ? "Reject"
+                : confirmAction.type === "activate"
+                  ? "Activate"
+                  : confirmAction.type === "deactivate"
+                    ? "Deactivate"
+                    : "Delete"
+          }
+          confirmColor={
+            confirmAction.type === "approve" ||
+            confirmAction.type === "activate"
+              ? "#059669"
+              : confirmAction.type === "reject" ||
+                  confirmAction.type === "deactivate"
+                ? "#D97706"
+                : "#DC2626"
+          }
+          onConfirm={() => {
+            if (confirmAction.type === "approve")
+              handleApprove(confirmAction.customer);
+            else if (confirmAction.type === "reject")
+              handleReject(confirmAction.customer);
+            else if (
+              confirmAction.type === "activate" ||
+              confirmAction.type === "deactivate"
+            )
+              handleToggleActive(confirmAction.customer);
+            else handleDelete(confirmAction.customer);
+          }}
+          onCancel={() => setConfirmAction(null)}
+          loading={actionLoading}
         />
       )}
 
@@ -402,16 +792,16 @@ export default function CustomerList() {
               color: "#4CAF50",
             },
             {
-              label: "With GST",
-              value: stats.withGST,
-              icon: FileText,
-              color: Colors.info,
+              label: "Pending Approval",
+              value: stats.pending,
+              icon: Clock,
+              color: "#D97706",
             },
             {
-              label: "Without GST",
-              value: stats.withoutGST,
-              icon: UserX,
-              color: Colors.warning,
+              label: "Approved",
+              value: stats.approved,
+              icon: ShieldCheck,
+              color: "#059669",
             },
           ].map(({ label, value, icon: Icon, color }) => (
             <div
@@ -443,6 +833,34 @@ export default function CustomerList() {
           ))}
         </div>
 
+        {/* Status Filter Tabs */}
+        <div className="flex gap-2 flex-wrap">
+          {[
+            { id: "All", label: "All", color: Colors.primary },
+            { id: "pending", label: "Pending", color: "#D97706" },
+            { id: "manual", label: "Manual Review", color: "#D97706" },
+            { id: "approved", label: "Approved", color: "#059669" },
+            { id: "auto", label: "Auto Approved", color: "#059669" },
+            { id: "rejected", label: "Rejected", color: "#DC2626" },
+          ].map((tab) => {
+            const active = statusFilter === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setStatusFilter(tab.id)}
+                className="px-3.5 py-2 rounded-2xl text-xs font-semibold transition-all"
+                style={{
+                  background: active ? tab.color : Colors.surface,
+                  color: active ? "#fff" : Colors.textSecondary,
+                  border: `1.5px solid ${active ? "transparent" : Colors.border}`,
+                }}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+
         {/* Table */}
         <div
           className="rounded-3xl overflow-hidden"
@@ -459,26 +877,32 @@ export default function CustomerList() {
               className="text-sm font-semibold"
               style={{ color: Colors.textPrimary }}
             >
-              {search
-                ? `${filtered.length} result${filtered.length !== 1 ? "s" : ""} for "${search}"`
+              {search || statusFilter !== "All"
+                ? `${filtered.length} result${filtered.length !== 1 ? "s" : ""}`
                 : "All Customers"}
             </p>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px]">
+            <table className="w-full min-w-[900px]">
               <thead>
                 <tr style={{ background: Colors.surfaceAlt }}>
-                  {["#", "Name", "Phone", "Address", "GST", "Status", ""].map(
-                    (h) => (
-                      <th
-                        key={h}
-                        className="px-5 py-3 text-left text-xs font-semibold uppercase"
-                        style={{ color: Colors.textSecondary }}
-                      >
-                        {h}
-                      </th>
-                    ),
-                  )}
+                  {[
+                    "#",
+                    "Customer",
+                    "Phone",
+                    "Address",
+                    "Approval",
+                    "Status",
+                    "Actions",
+                  ].map((h) => (
+                    <th
+                      key={h}
+                      className="px-5 py-3 text-left text-xs font-semibold uppercase"
+                      style={{ color: Colors.textSecondary }}
+                    >
+                      {h}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
@@ -495,134 +919,210 @@ export default function CustomerList() {
                     </td>
                   </tr>
                 ) : (
-                  filtered.map((customer, idx) => (
-                    <tr
-                      key={customer._id}
-                      className="group"
-                      style={{ borderTop: `1px solid ${Colors.divider}` }}
-                      onMouseEnter={(e) =>
-                        ((e.currentTarget as HTMLElement).style.background =
-                          Colors.primaryLight)
-                      }
-                      onMouseLeave={(e) =>
-                        ((e.currentTarget as HTMLElement).style.background =
-                          "transparent")
-                      }
-                    >
-                      <td className="px-5 py-4">
-                        <span
-                          className="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold"
-                          style={{
-                            background: Colors.surfaceAlt,
-                            color: Colors.textSecondary,
-                          }}
-                        >
-                          {idx + 1}
-                        </span>
-                      </td>
-                      <td className="px-5 py-4">
-                        <div className="flex items-center gap-2.5">
-                          <div
-                            className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white"
-                            style={{
-                              background: `linear-gradient(135deg, ${Colors.gradientStart}, ${Colors.gradientEnd})`,
-                            }}
-                          >
-                            {getCustomerName(customer).charAt(0)}
-                          </div>
+                  filtered.map((customer, idx) => {
+                    const approvalCfg = getApprovalStatusBadge(
+                      customer.approvalStatus,
+                    );
+                    const ApprovalIcon = approvalCfg.icon;
+                    const isPending =
+                      customer.approvalStatus === "pending" ||
+                      customer.approvalStatus === "manual";
+
+                    return (
+                      <tr
+                        key={customer._id}
+                        className="group"
+                        style={{ borderTop: `1px solid ${Colors.divider}` }}
+                        onMouseEnter={(e) =>
+                          ((e.currentTarget as HTMLElement).style.background =
+                            Colors.primaryLight)
+                        }
+                        onMouseLeave={(e) =>
+                          ((e.currentTarget as HTMLElement).style.background =
+                            "transparent")
+                        }
+                      >
+                        <td className="px-5 py-4">
                           <span
-                            className="text-sm font-semibold"
-                            style={{ color: Colors.textPrimary }}
-                          >
-                            {getCustomerName(customer)}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-5 py-4">
-                        <div className="flex items-center gap-1.5">
-                          <Phone size={14} color={Colors.primary} />
-                          <span
-                            className="text-sm"
-                            style={{ color: Colors.textSecondary }}
-                          >
-                            {formatPhone(customer.phone)}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-5 py-4 max-w-[200px]">
-                        <div className="flex items-start gap-1.5">
-                          <MapPin
-                            size={14}
-                            color={Colors.textMuted}
-                            className="mt-0.5"
-                          />
-                          <span
-                            className="text-sm leading-snug line-clamp-2"
-                            style={{ color: Colors.textSecondary }}
-                          >
-                            {getCustomerAddress(customer)}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-5 py-4">
-                        {customer.profile?.gstNumber ? (
-                          <span
-                            className="text-xs font-mono font-semibold px-2 py-1 rounded-lg"
-                            style={{
-                              background: `${Colors.info}18`,
-                              color: Colors.info,
-                            }}
-                          >
-                            {customer.profile.gstNumber}
-                          </span>
-                        ) : (
-                          <span
-                            className="text-xs px-2 py-1 rounded-lg"
+                            className="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold"
                             style={{
                               background: Colors.surfaceAlt,
-                              color: Colors.textMuted,
+                              color: Colors.textSecondary,
                             }}
                           >
-                            N/A
+                            {idx + 1}
                           </span>
-                        )}
-                      </td>
-                      <td className="px-5 py-4">
-                        <span
-                          className="text-xs px-2.5 py-1 rounded-xl font-semibold"
-                          style={{
-                            background: customer.isActive
-                              ? "#E8F5E9"
-                              : "#FFF0F3",
-                            color: customer.isActive ? "#4CAF50" : "#E53935",
-                          }}
-                        >
-                          {customer.isActive ? "Active" : "Inactive"}
-                        </span>
-                      </td>
-                      <td className="px-5 py-4">
-                        <button
-                          onClick={() => handleDeactivateClick(customer)}
-                          className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold"
-                          style={{
-                            background: "#FFF0F3",
-                            color: Colors.error,
-                            border: "1px solid #FFD0DA",
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.background = Colors.error;
-                            e.currentTarget.style.color = "#fff";
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.background = "#FFF0F3";
-                            e.currentTarget.style.color = Colors.error;
-                          }}
-                        >
-                          <Trash2 size={14} /> Deactivate
-                        </button>
-                      </td>
-                    </tr>
-                  ))
+                        </td>
+                        <td className="px-5 py-4">
+                          <div className="flex items-center gap-2.5">
+                            <div
+                              className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white"
+                              style={{
+                                background: `linear-gradient(135deg, ${Colors.gradientStart}, ${Colors.gradientEnd})`,
+                              }}
+                            >
+                              {getCustomerName(customer).charAt(0)}
+                            </div>
+                            <span
+                              className="text-sm font-semibold"
+                              style={{ color: Colors.textPrimary }}
+                            >
+                              {getCustomerName(customer)}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-5 py-4">
+                          <div className="flex items-center gap-1.5">
+                            <Phone size={14} color={Colors.primary} />
+                            <span
+                              className="text-sm"
+                              style={{ color: Colors.textSecondary }}
+                            >
+                              {formatPhone(customer.phone)}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-5 py-4 max-w-[180px]">
+                          <div className="flex items-start gap-1.5">
+                            <MapPin
+                              size={14}
+                              color={Colors.textMuted}
+                              className="mt-0.5"
+                            />
+                            <span
+                              className="text-sm leading-snug line-clamp-2"
+                              style={{ color: Colors.textSecondary }}
+                            >
+                              {getCustomerAddress(customer)}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-5 py-4">
+                          <span
+                            className="text-xs px-2.5 py-1 rounded-xl font-semibold flex items-center gap-1 w-fit"
+                            style={{
+                              background: approvalCfg.bg,
+                              color: approvalCfg.color,
+                            }}
+                          >
+                            <ApprovalIcon size={12} strokeWidth={2.5} />
+                            {approvalCfg.label}
+                          </span>
+                        </td>
+                        <td className="px-5 py-4">
+                          <span
+                            className="text-xs px-2.5 py-1 rounded-xl font-semibold"
+                            style={{
+                              background: customer.isActive
+                                ? "#E8F5E9"
+                                : "#FFF0F3",
+                              color: customer.isActive ? "#4CAF50" : "#E53935",
+                            }}
+                          >
+                            {customer.isActive ? "Active" : "Inactive"}
+                          </span>
+                        </td>
+                        <td className="px-5 py-4">
+                          <div className="flex items-center gap-1.5">
+                            {/* View Button */}
+                            <button
+                              onClick={() => setViewCustomer(customer)}
+                              className="p-2 rounded-xl transition-all"
+                              style={{
+                                background: Colors.primaryLight,
+                                color: Colors.primary,
+                              }}
+                              title="View Details"
+                            >
+                              <Eye size={15} strokeWidth={2} />
+                            </button>
+
+                            {/* Approve Button (for pending customers) */}
+                            {isPending && (
+                              <button
+                                onClick={() =>
+                                  setConfirmAction({
+                                    type: "approve",
+                                    customer,
+                                  })
+                                }
+                                className="p-2 rounded-xl transition-all"
+                                style={{
+                                  background: "#d1fae5",
+                                  color: "#059669",
+                                }}
+                                title="Approve"
+                              >
+                                <CheckCircle2 size={15} strokeWidth={2} />
+                              </button>
+                            )}
+
+                            {/* Reject Button (for pending customers) */}
+                            {isPending && (
+                              <button
+                                onClick={() =>
+                                  setConfirmAction({ type: "reject", customer })
+                                }
+                                className="p-2 rounded-xl transition-all"
+                                style={{
+                                  background: "#FEE2E2",
+                                  color: "#DC2626",
+                                }}
+                                title="Reject"
+                              >
+                                <Ban size={15} strokeWidth={2} />
+                              </button>
+                            )}
+
+                            {/* Activate/Deactivate Toggle */}
+                            <button
+                              onClick={() =>
+                                setConfirmAction({
+                                  type: customer.isActive
+                                    ? "deactivate"
+                                    : "activate",
+                                  customer,
+                                })
+                              }
+                              className="p-2 rounded-xl transition-all"
+                              style={{
+                                background: customer.isActive
+                                  ? "#FFF3E0"
+                                  : "#E8F5E9",
+                                color: customer.isActive
+                                  ? "#D97706"
+                                  : "#4CAF50",
+                              }}
+                              title={
+                                customer.isActive ? "Deactivate" : "Activate"
+                              }
+                            >
+                              {customer.isActive ? (
+                                <UserMinus size={15} strokeWidth={2} />
+                              ) : (
+                                <UserCheck size={15} strokeWidth={2} />
+                              )}
+                            </button>
+
+                            {/* Delete Button */}
+                            <button
+                              onClick={() =>
+                                setConfirmAction({ type: "delete", customer })
+                              }
+                              className="p-2 rounded-xl transition-all"
+                              style={{
+                                background: "#FEE2E2",
+                                color: "#DC2626",
+                              }}
+                              title="Delete"
+                            >
+                              <Trash2 size={15} strokeWidth={2} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
