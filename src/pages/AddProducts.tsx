@@ -1,3 +1,4 @@
+import * as XLSX from "xlsx";
 import { useState, useRef, useCallback } from "react";
 import {
   PackagePlus,
@@ -6,65 +7,38 @@ import {
   Tag,
   IndianRupee,
   AlignLeft,
-  ToggleLeft,
-  ToggleRight,
   CheckCircle2,
   AlertCircle,
   X,
   Download,
   Trash2,
   ChevronDown,
-  Star,
-  TrendingUp,
   Image as ImageIcon,
   Smartphone,
-  Cpu,
-  Palette,
-  Ruler,
-  Weight,
-  Shield,
+  Boxes,
   Plus,
-  Monitor,
-  Cable,
+  ImagePlus,
 } from "lucide-react";
 import Colors from "../constants/colors";
-import {
-  CATEGORIES,
-  PRODUCT_TAGS,
-  COMPATIBILITY_OPTIONS,
-  WARRANTY_OPTIONS,
-  COLORS,
-  MATERIALS,
-} from "../constants/products";
+import { CATEGORIES } from "../constants/products";
 import { ProductAPI } from "../config/api";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-interface Specification {
-  key: string;
-  value: string;
-}
-
 interface ProductForm {
   name: string;
   brand: string;
   category: string;
-  subCategory: string;
-  type: string;
-  compatibility: string[];
   price: string;
   originalPrice: string;
-  color: string;
-  material: string;
-  dimensions: string;
-  weight: string;
-  warranty: string;
   stock: string;
   minOrderQty: string;
   description: string;
-  specifications: Specification[];
-  tags: string[];
-  fastMoving: boolean;
-  featured: boolean;
+}
+
+interface BulkRowImage {
+  file: File;
+  preview: string;
+  isPrimary: boolean;
 }
 
 interface BulkRow {
@@ -72,49 +46,26 @@ interface BulkRow {
   name: string;
   brand: string;
   category: string;
-  subCategory: string;
-  type: string;
-  compatibility: string;
   price: string;
   originalPrice: string;
-  color: string;
-  material: string;
-  dimensions: string;
-  weight: string;
-  warranty: string;
   description: string;
-  specifications: string;
-  image_urls: string;
   min_order_qty: string;
-  fast_moving: string;
-  featured: string;
   stock: string;
-  tags: string;
   status: "valid" | "error";
   error?: string;
+  images: BulkRowImage[];
+  expanded: boolean;
 }
 
 const EMPTY_FORM: ProductForm = {
   name: "",
   brand: "",
   category: "",
-  subCategory: "",
-  type: "",
-  compatibility: [],
   price: "",
   originalPrice: "",
-  color: "",
-  material: "",
-  dimensions: "",
-  weight: "",
-  warranty: "No Warranty",
   stock: "",
   minOrderQty: "1",
   description: "",
-  specifications: [{ key: "", value: "" }],
-  tags: [],
-  fastMoving: false,
-  featured: false,
 };
 
 // ── Shared UI Components ──────────────────────────────────────────────────────
@@ -214,79 +165,6 @@ function Toast({
   );
 }
 
-function TagSelector({
-  selectedTags,
-  onToggle,
-}: {
-  selectedTags: string[];
-  onToggle: (tagId: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="relative">
-      <button
-        onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm"
-        style={{
-          background: Colors.surfaceAlt,
-          border: `1.5px solid ${Colors.border}`,
-          color: Colors.textPrimary,
-        }}
-      >
-        <span>
-          {selectedTags.length
-            ? selectedTags
-                .map((id) => PRODUCT_TAGS.find((t) => t.id === id)?.name)
-                .join(", ")
-            : "Select product tags..."}
-        </span>
-        <ChevronDown
-          size={16}
-          style={{
-            color: Colors.textMuted,
-            transform: open ? "rotate(180deg)" : "none",
-            transition: "transform 0.2s",
-          }}
-        />
-      </button>
-      {open && (
-        <>
-          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div
-            className="absolute z-20 mt-1 w-full rounded-2xl p-2 max-h-60 overflow-y-auto shadow-xl"
-            style={{
-              background: Colors.surface,
-              border: `1px solid ${Colors.border}`,
-            }}
-          >
-            {PRODUCT_TAGS.map((tag) => (
-              <label
-                key={tag.id}
-                className="flex items-center gap-2 px-3 py-2 rounded-xl cursor-pointer transition-colors"
-                style={{
-                  background: selectedTags.includes(tag.id)
-                    ? Colors.primaryLight
-                    : "transparent",
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={selectedTags.includes(tag.id)}
-                  onChange={() => onToggle(tag.id)}
-                  className="w-4 h-4 rounded accent-[#00A884]"
-                />
-                <span className="text-sm" style={{ color: Colors.textPrimary }}>
-                  {tag.name}
-                </span>
-              </label>
-            ))}
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
 function Spinner() {
   return (
     <svg
@@ -326,7 +204,7 @@ export default function AddProducts() {
   } | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // Multiple images
+  // Multiple images for single product
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -347,23 +225,7 @@ export default function AddProducts() {
   const set = (key: keyof ProductForm, value: any) =>
     setForm((prev) => ({ ...prev, [key]: value }));
 
-  const toggleTag = (tagId: string) =>
-    setForm((prev) => ({
-      ...prev,
-      tags: prev.tags.includes(tagId)
-        ? prev.tags.filter((t) => t !== tagId)
-        : [...prev.tags, tagId],
-    }));
-
-  const toggleCompatibility = (device: string) =>
-    setForm((prev) => ({
-      ...prev,
-      compatibility: prev.compatibility.includes(device)
-        ? prev.compatibility.filter((c) => c !== device)
-        : [...prev.compatibility, device],
-    }));
-
-  // ── Image Handlers ───────────────────────────────────────────────────────
+  // ── Single Product Image Handlers ──────────────────────────────────────────
   const handleImageFilesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (imageFiles.length + files.length > 8) {
@@ -388,35 +250,7 @@ export default function AddProducts() {
     if (imageInputRef.current) imageInputRef.current.value = "";
   };
 
-  // ── Specifications Handlers ──────────────────────────────────────────────
-  const addSpecification = () => {
-    setForm((prev) => ({
-      ...prev,
-      specifications: [...prev.specifications, { key: "", value: "" }],
-    }));
-  };
-
-  const updateSpecification = (
-    index: number,
-    field: "key" | "value",
-    value: string,
-  ) => {
-    setForm((prev) => ({
-      ...prev,
-      specifications: prev.specifications.map((spec, i) =>
-        i === index ? { ...spec, [field]: value } : spec,
-      ),
-    }));
-  };
-
-  const removeSpecification = (index: number) => {
-    setForm((prev) => ({
-      ...prev,
-      specifications: prev.specifications.filter((_, i) => i !== index),
-    }));
-  };
-
-  // ── Validation ───────────────────────────────────────────────────────────
+  // ── Single Submit ──────────────────────────────────────────────────────────
   const validateSingle = (): string | null => {
     if (!form.name.trim()) return "Product name is required.";
     if (!form.category) return "Please select a category.";
@@ -427,14 +261,12 @@ export default function AddProducts() {
     return null;
   };
 
-  // ── Single Submit ────────────────────────────────────────────────────────
   const handleSingleSubmit = async () => {
     const err = validateSingle();
     if (err) {
       showToast("error", err);
       return;
     }
-
     setSubmitting(true);
     try {
       const fd = new FormData();
@@ -442,43 +274,12 @@ export default function AddProducts() {
       fd.append("category", form.category);
       fd.append("sellingPrice", form.price);
       fd.append("stockQuantity", form.stock);
-      fd.append("warranty", form.warranty || "No Warranty");
-
+      fd.append("minOrderQuantity", form.minOrderQty);
       if (form.brand.trim()) fd.append("brand", form.brand.trim());
-      if (form.subCategory) fd.append("subCategory", form.subCategory);
-      if (form.type.trim()) fd.append("type", form.type.trim());
-      if (form.compatibility.length)
-        fd.append("compatibility", form.compatibility.join(","));
       if (form.originalPrice) fd.append("originalPrice", form.originalPrice);
-      if (form.color) fd.append("color", form.color);
-      if (form.material) fd.append("material", form.material);
-      if (form.dimensions.trim())
-        fd.append("dimensions", form.dimensions.trim());
-      if (form.weight.trim()) fd.append("weight", form.weight.trim());
-      if (form.minOrderQty) fd.append("minOrderQuantity", form.minOrderQty);
       if (form.description.trim())
         fd.append("description", form.description.trim());
-
-      // Append specifications as JSON string
-      const validSpecs = form.specifications.filter(
-        (s) => s.key.trim() && s.value.trim(),
-      );
-      if (validSpecs.length > 0) {
-        const specsObj: Record<string, string> = {};
-        validSpecs.forEach((s) => {
-          specsObj[s.key.trim()] = s.value.trim();
-        });
-        fd.append("specifications", JSON.stringify(specsObj));
-      }
-
-      if (form.tags.length) fd.append("tags", form.tags.join(","));
-      fd.append("isFastMoving", String(form.fastMoving));
-      fd.append("isFeatured", String(form.featured));
-
-      // Append all images with field name "images"
-      imageFiles.forEach((file) => {
-        fd.append("images", file);
-      });
+      imageFiles.forEach((file) => fd.append("images", file));
 
       await ProductAPI.addSingle(fd);
       showToast("success", `"${form.name}" added successfully!`);
@@ -494,18 +295,83 @@ export default function AddProducts() {
     }
   };
 
-  // ── Bulk Handlers ────────────────────────────────────────────────────────
-  const parseCsv = useCallback((text: string) => {
-    const lines = text.trim().split("\n");
-    const headers = lines[0]
-      .split(",")
-      .map((h) => h.trim().toLowerCase().replace(/\s+/g, "_"));
-    const rows: BulkRow[] = lines.slice(1).map((line, i) => {
-      const vals = line.split(",").map((v) => v.trim().replace(/^"|"$/g, ""));
+  // ── Bulk Handlers ──────────────────────────────────────────────────────────
+  const parseFile = useCallback((file: File) => {
+    const isExcel = file.name.endsWith(".xlsx") || file.name.endsWith(".xls");
+
+    if (isExcel) {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const data = new Uint8Array(ev.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: "array" });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const rawRows = XLSX.utils.sheet_to_json<Record<string, string>>(
+          sheet,
+          {
+            defval: "",
+            raw: false,
+          },
+        );
+        buildBulkRows(rawRows);
+      };
+      reader.readAsArrayBuffer(file); // ← correct for binary xlsx
+    } else {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const text = (ev.target?.result as string).replace(/^\uFEFF/, ""); // strip BOM
+        const lines = text.trim().split(/\r?\n/);
+        if (lines.length < 2) return;
+
+        // Auto-detect delimiter
+        const firstLine = lines[0];
+        const delimiter =
+          (firstLine.match(/;/g) || []).length >
+          (firstLine.match(/,/g) || []).length
+            ? ";"
+            : ",";
+
+        const headers = firstLine
+          .split(delimiter)
+          .map((h) => h.trim().replace(/^"|"$/g, ""));
+        const rawRows = lines.slice(1).map((line) => {
+          const vals = line
+            .split(delimiter)
+            .map((v) => v.trim().replace(/^"|"$/g, ""));
+          const obj: Record<string, string> = {};
+          headers.forEach((h, i) => {
+            obj[h] = vals[i] ?? "";
+          });
+          return obj;
+        });
+        buildBulkRows(rawRows);
+      };
+      reader.readAsText(file);
+    }
+  }, []);
+
+  // ── normalize keys + build BulkRow[] ─────────────────────────────────────────
+  const buildBulkRows = useCallback((rawRows: Record<string, string>[]) => {
+    const rows: BulkRow[] = rawRows.map((raw, i) => {
+      // Normalize keys: "Name" → "name", "Original Price" → "original_price"
       const obj: Record<string, string> = {};
-      headers.forEach((h, idx) => {
-        obj[h] = vals[idx] ?? "";
+      Object.keys(raw).forEach((key) => {
+        const normalized = key
+          .replace(/^\uFEFF/, "") // BOM on first key
+          .trim()
+          .toLowerCase()
+          .replace(/\s+/g, "_")
+          .replace(/[^a-z0-9_]/g, "");
+        obj[normalized] = String(raw[key] ?? "")
+          .trim()
+          .replace(/^[₹$€£¥]+/, "") // strip currency symbols
+          .replace(/^"|"$/g, ""); // strip stray quotes
       });
+
+      // Normalize numeric fields (remove thousand separators like "1,499")
+      ["price", "original_price", "stock", "min_order_qty"].forEach((f) => {
+        if (obj[f]) obj[f] = obj[f].replace(/,/g, "").replace(/\.0+$/, "");
+      });
+
       const hasError =
         !obj["name"] || !obj["price"] || !obj["stock"] || !obj["category"];
       return {
@@ -513,24 +379,11 @@ export default function AddProducts() {
         name: obj["name"] ?? "",
         brand: obj["brand"] ?? "",
         category: obj["category"] ?? "",
-        subCategory: obj["sub_category"] ?? "",
-        type: obj["type"] ?? "",
-        compatibility: obj["compatibility"] ?? "",
         price: obj["price"] ?? "",
         originalPrice: obj["original_price"] ?? "",
-        color: obj["color"] ?? "",
-        material: obj["material"] ?? "",
-        dimensions: obj["dimensions"] ?? "",
-        weight: obj["weight"] ?? "",
-        warranty: obj["warranty"] ?? "No Warranty",
         description: obj["description"] ?? "",
-        specifications: obj["specifications"] ?? "",
-        image_urls: obj["image_urls"] ?? "",
         min_order_qty: obj["min_order_qty"] ?? "1",
-        fast_moving: obj["fast_moving"] ?? "no",
-        featured: obj["featured"] ?? "no",
         stock: obj["stock"] ?? "",
-        tags: obj["tags"] ?? "",
         status: hasError ? "error" : "valid",
         error: hasError
           ? !obj["name"]
@@ -541,6 +394,8 @@ export default function AddProducts() {
                 ? "Stock missing"
                 : "Category missing"
           : undefined,
+        images: [],
+        expanded: false,
       };
     });
     setBulkRows(rows);
@@ -553,53 +408,154 @@ export default function AddProducts() {
       setDragOver(false);
       const file = e.dataTransfer.files[0];
       if (!file) return;
-      if (
-        !file.name.endsWith(".csv") &&
-        !file.name.endsWith(".xlsx") &&
-        !file.name.endsWith(".xls")
-      ) {
+      if (!file.name.match(/\.(csv|xlsx|xls)$/i)) {
         showToast("error", "Please upload a .csv, .xlsx, or .xls file.");
         return;
       }
       bulkFileRef.current = file;
-      const reader = new FileReader();
-      reader.onload = (ev) => parseCsv(ev.target?.result as string);
-      reader.readAsText(file);
+      parseFile(file); // ← was: reader.readAsText → parseCsv
     },
-    [parseCsv],
+    [parseFile],
   );
 
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     bulkFileRef.current = file;
-    const reader = new FileReader();
-    reader.onload = (ev) => parseCsv(ev.target?.result as string);
-    reader.readAsText(file);
+    parseFile(file); // ← was: reader.readAsText → parseCsv
   };
 
-  const removeRow = (id: string) =>
-    setBulkRows((prev) => prev.filter((r) => r.id !== id));
+  // ── Bulk Row Image Management ─────────────────────────────────────────────
+  const toggleRowExpand = (rowId: string) => {
+    setBulkRows((prev) =>
+      prev.map((r) => (r.id === rowId ? { ...r, expanded: !r.expanded } : r)),
+    );
+  };
 
-  const handleBulkSubmit = async () => {
-    const validCount = bulkRows.filter((r) => r.status === "valid").length;
-    if (!validCount) {
-      showToast("error", "No valid rows to upload.");
-      return;
+  const addImagesToRow = (rowId: string, files: FileList) => {
+    const newImages: BulkRowImage[] = Array.from(files).map((file, _index) => ({
+      file,
+      preview: URL.createObjectURL(file),
+      isPrimary: false,
+    }));
+    setBulkRows((prev) =>
+      prev.map((r) => {
+        if (r.id !== rowId) return r;
+        const totalImages = r.images.length + newImages.length;
+        if (totalImages > 8) {
+          showToast("error", "Maximum 8 images per product");
+          return r;
+        }
+        // Make first image primary if no images exist
+        if (r.images.length === 0 && newImages.length > 0) {
+          newImages[0].isPrimary = true;
+        }
+        return { ...r, images: [...r.images, ...newImages], expanded: true };
+      }),
+    );
+  };
+
+  const removeBulkImage = (rowId: string, imageIndex: number) => {
+    setBulkRows((prev) =>
+      prev.map((r) => {
+        if (r.id !== rowId) return r;
+        const image = r.images[imageIndex];
+        URL.revokeObjectURL(image.preview);
+        const newImages = r.images.filter((_, i) => i !== imageIndex);
+        // If removed image was primary, set first remaining as primary
+        if (image.isPrimary && newImages.length > 0) {
+          newImages[0].isPrimary = true;
+        }
+        return { ...r, images: newImages };
+      }),
+    );
+  };
+
+  const setBulkImagePrimary = (rowId: string, imageIndex: number) => {
+    setBulkRows((prev) =>
+      prev.map((r) => {
+        if (r.id !== rowId) return r;
+        return {
+          ...r,
+          images: r.images.map((img, i) => ({
+            ...img,
+            isPrimary: i === imageIndex,
+          })),
+        };
+      }),
+    );
+  };
+
+  const removeRow = (id: string) => {
+    // Clean up image previews
+    const row = bulkRows.find((r) => r.id === id);
+    if (row) {
+      row.images.forEach((img) => URL.revokeObjectURL(img.preview));
     }
-    if (!bulkFileRef.current) {
-      showToast("error", "File reference lost — please re-upload the file.");
+    setBulkRows((prev) => prev.filter((r) => r.id !== id));
+  };
+
+  // ── Bulk Submit ───────────────────────────────────────────────────────────
+  // ── Bulk Submit (with per-product image upload) ──────────────────────────────
+  const handleBulkSubmit = async () => {
+    const validRows = bulkRows.filter((r) => r.status === "valid");
+    if (validRows.length === 0) {
+      showToast("error", "No valid rows to upload.");
       return;
     }
 
     setBulkSubmitting(true);
     setBulkUploadResult(null);
-    try {
-      const fd = new FormData();
-      fd.append("file", bulkFileRef.current);
 
-      const res = await ProductAPI.bulkUpload(fd);
-      const { successCount, failedCount, failedRows } = res.data;
+    let successCount = 0;
+    let failedCount = 0;
+    const failedRows: { row: number; errors: unknown }[] = [];
+
+    try {
+      // Upload each valid product individually with its images
+      for (let i = 0; i < validRows.length; i++) {
+        const row = validRows[i];
+        try {
+          const fd = new FormData();
+          fd.append("name", row.name.trim());
+          fd.append("category", row.category);
+          fd.append("sellingPrice", row.price);
+          fd.append("stockQuantity", row.stock);
+          fd.append("minOrderQuantity", row.min_order_qty || "1");
+          if (row.brand.trim()) fd.append("brand", row.brand.trim());
+          if (row.originalPrice) fd.append("originalPrice", row.originalPrice);
+          if (row.description.trim())
+            fd.append("description", row.description.trim());
+
+          // Append images for this product
+          if (row.images.length > 0) {
+            row.images.forEach((img, _imgIndex) => {
+              fd.append("images", img.file, img.file.name);
+            });
+
+            // Mark primary image
+            const primaryIndex = row.images.findIndex((img) => img.isPrimary);
+            if (primaryIndex >= 0) {
+              // The first image sent will be primary by default in the backend
+              // If primary is not the first, we'd need backend support
+            }
+          }
+
+          console.log(
+            `📤 Uploading product ${i + 1}/${validRows.length}: ${row.name}`,
+          );
+          await ProductAPI.addSingle(fd);
+          successCount++;
+          console.log(`✅ Product ${i + 1} uploaded: ${row.name}`);
+        } catch (err: any) {
+          failedCount++;
+          failedRows.push({
+            row: parseInt(row.id) + 2, // +2 for header and 0-index
+            errors: err.message || "Upload failed",
+          });
+          console.error(`❌ Failed to upload row ${row.id}:`, err);
+        }
+      }
 
       setBulkUploadResult({ successCount, failedCount, failedRows });
 
@@ -607,6 +563,10 @@ export default function AddProducts() {
         showToast(
           "success",
           `All ${successCount} products uploaded successfully!`,
+        );
+        // Clean up
+        bulkRows.forEach((r) =>
+          r.images.forEach((img) => URL.revokeObjectURL(img.preview)),
         );
         setBulkRows([]);
         bulkFileRef.current = null;
@@ -616,7 +576,7 @@ export default function AddProducts() {
           `${successCount} uploaded, ${failedCount} failed — see details below.`,
         );
       } else {
-        showToast("error", `All ${failedCount} rows failed validation.`);
+        showToast("error", `All ${failedCount} rows failed to upload.`);
       }
     } catch (e) {
       showToast(
@@ -628,11 +588,9 @@ export default function AddProducts() {
     }
   };
 
+  // ── Download Template (no image_urls) ──────────────────────────────────────
   const downloadTemplate = () => {
-    const csv = `name,brand,category,sub_category,type,compatibility,price,original_price,color,material,dimensions,weight,warranty,stock,min_order_qty,description,specifications,image_urls,fast_moving,featured,tags
-USB-C Fast Charging Cable,Anker,charging-cables,USB-C to USB-C,USB-C,"iPhone 15,MacBook,Android",599,999,Black,Braided Nylon,"1.2m","50g","1 Year",100,2,"Fast charging USB-C cable with 60W PD support","Cable Length:1.2m;Connector:USB-C;Data Transfer:480Mbps","https://example.com/cable1.jpg,https://example.com/cable2.jpg","yes","yes","Fast Charging,Best Seller"
-Wireless Bluetooth Earbuds,boAt,headphones-earphones,Wireless Earbuds,Bluetooth 5.3,Universal,1499,2990,Black,Plastic,"6x5x3cm","45g","1 Year",50,1,"True wireless earbuds with ENC and 40hrs battery","Bluetooth:5.3;Battery:40hrs;Driver:10mm;IPX Rating:IPX5","https://example.com/earbuds1.jpg","yes","no","Wireless,Best Seller,Travel Ready"
-20W PD Wall Charger,Spigen,chargers-adapters,Wall Charger,GaN USB-C,Universal,799,1299,White,Platinum,"4x3.5x3cm","65g","2 Years",200,1,"Compact 20W PD fast charger compatible with all USB-C devices","Type:GaN;Output:20W PD;Compatibility:Universal","https://example.com/charger1.jpg","yes","yes","Fast Charging,Premium,Travel Ready"`;
+    const csv = `name,brand,category,price,original_price,stock,min_order_qty,description\nUSB-C Fast Charging Cable,Anker,charging-cables,599,999,100,2,"Fast charging USB-C cable with 60W PD support"\nWireless Bluetooth Earbuds,boAt,headphones-earphones,1499,2990,50,1,"True wireless earbuds with ENC"\n20W PD Wall Charger,Spigen,chargers-adapters,799,1299,200,1,"Compact 20W PD fast charger"`;
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -645,9 +603,6 @@ Wireless Bluetooth Earbuds,boAt,headphones-earphones,Wireless Earbuds,Bluetooth 
   const inputClass =
     "w-full bg-transparent pl-10 pr-4 py-3.5 text-sm outline-none";
   const inputStyle = { color: Colors.textPrimary };
-  const availableSubcategories = form.category
-    ? CATEGORIES.find((c) => c.id === form.category)?.subcategories || []
-    : [];
 
   return (
     <>
@@ -692,12 +647,9 @@ Wireless Bluetooth Earbuds,boAt,headphones-earphones,Wireless Earbuds,Bluetooth 
           />
         </div>
 
-        {/* ════════════════════════════════════
-            TAB: SINGLE PRODUCT
-        ════════════════════════════════════ */}
+        {/* ═══ TAB: SINGLE PRODUCT ═══ */}
         {tab === "single" && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* ── Left: Form ── */}
             <div
               className="lg:col-span-2 rounded-3xl p-6 flex flex-col gap-5"
               style={{
@@ -713,7 +665,6 @@ Wireless Bluetooth Earbuds,boAt,headphones-earphones,Wireless Earbuds,Bluetooth 
                 Product Details
               </p>
 
-              {/* Name + Brand */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="flex flex-col gap-1.5">
                   <FieldLabel>Product Name *</FieldLabel>
@@ -752,7 +703,7 @@ Wireless Bluetooth Earbuds,boAt,headphones-earphones,Wireless Earbuds,Bluetooth 
                             : Colors.textMuted,
                       }}
                     >
-                      <Cpu size={17} strokeWidth={2} />
+                      <Tag size={17} strokeWidth={2} />
                     </div>
                     <input
                       className={inputClass}
@@ -767,198 +718,51 @@ Wireless Bluetooth Earbuds,boAt,headphones-earphones,Wireless Earbuds,Bluetooth 
                 </div>
               </div>
 
-              {/* Category + SubCategory */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <FieldLabel>Category *</FieldLabel>
-                  <InputWrapper focused={focused === "category"}>
-                    <div
-                      className="absolute left-3.5"
-                      style={{
-                        color:
-                          focused === "category"
-                            ? Colors.primary
-                            : Colors.textMuted,
-                      }}
-                    >
-                      <Monitor size={17} strokeWidth={2} />
-                    </div>
-                    <select
-                      className={`${inputClass} appearance-none cursor-pointer`}
-                      style={{
-                        color: form.category
-                          ? Colors.textPrimary
+              <div className="flex flex-col gap-1.5">
+                <FieldLabel>Category *</FieldLabel>
+                <InputWrapper focused={focused === "category"}>
+                  <div
+                    className="absolute left-3.5"
+                    style={{
+                      color:
+                        focused === "category"
+                          ? Colors.primary
                           : Colors.textMuted,
-                        background: "transparent",
-                      }}
-                      value={form.category}
-                      onChange={(e) => {
-                        set("category", e.target.value);
-                        set("subCategory", "");
-                      }}
-                      onFocus={() => setFocused("category")}
-                      onBlur={() => setFocused("")}
-                    >
-                      <option value="" disabled>
-                        Select category
-                      </option>
-                      {CATEGORIES.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.icon} {c.name}
-                        </option>
-                      ))}
-                    </select>
-                    <div
-                      className="absolute right-3.5 pointer-events-none"
-                      style={{ color: Colors.textMuted }}
-                    >
-                      <ChevronDown size={16} />
-                    </div>
-                  </InputWrapper>
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <FieldLabel>Sub Category</FieldLabel>
-                  <InputWrapper focused={focused === "subCategory"}>
-                    <div
-                      className="absolute left-3.5"
-                      style={{
-                        color:
-                          focused === "subCategory"
-                            ? Colors.primary
-                            : Colors.textMuted,
-                      }}
-                    >
-                      <Monitor size={17} strokeWidth={2} />
-                    </div>
-                    <select
-                      className={`${inputClass} appearance-none cursor-pointer`}
-                      style={{
-                        color: form.subCategory
-                          ? Colors.textPrimary
-                          : Colors.textMuted,
-                        background: "transparent",
-                      }}
-                      value={form.subCategory}
-                      onChange={(e) => set("subCategory", e.target.value)}
-                      onFocus={() => setFocused("subCategory")}
-                      onBlur={() => setFocused("")}
-                      disabled={!form.category}
-                    >
-                      <option value="">Select sub category</option>
-                      {availableSubcategories.map((sc) => (
-                        <option key={sc} value={sc}>
-                          {sc}
-                        </option>
-                      ))}
-                    </select>
-                    <div
-                      className="absolute right-3.5 pointer-events-none"
-                      style={{ color: Colors.textMuted }}
-                    >
-                      <ChevronDown size={16} />
-                    </div>
-                  </InputWrapper>
-                </div>
-              </div>
-
-              {/* Type + Compatibility */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <FieldLabel>Type / Variant</FieldLabel>
-                  <InputWrapper focused={focused === "type"}>
-                    <div
-                      className="absolute left-3.5"
-                      style={{
-                        color:
-                          focused === "type"
-                            ? Colors.primary
-                            : Colors.textMuted,
-                      }}
-                    >
-                      <Cable size={17} strokeWidth={2} />
-                    </div>
-                    <input
-                      className={inputClass}
-                      style={inputStyle}
-                      placeholder="e.g. USB-C, Bluetooth, GaN"
-                      value={form.type}
-                      onChange={(e) => set("type", e.target.value)}
-                      onFocus={() => setFocused("type")}
-                      onBlur={() => setFocused("")}
-                    />
-                  </InputWrapper>
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <FieldLabel>Compatibility</FieldLabel>
-                  <div className="relative">
-                    <button
-                      onClick={() =>
-                        setFocused(
-                          focused === "compatibility" ? "" : "compatibility",
-                        )
-                      }
-                      className="w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm"
-                      style={{
-                        background: Colors.surfaceAlt,
-                        border: `1.5px solid ${focused === "compatibility" ? Colors.borderFocus : Colors.border}`,
-                        color: Colors.textPrimary,
-                      }}
-                    >
-                      <span className="truncate">
-                        {form.compatibility.length
-                          ? form.compatibility.join(", ")
-                          : "Select compatible devices..."}
-                      </span>
-                      <ChevronDown
-                        size={16}
-                        style={{ color: Colors.textMuted }}
-                      />
-                    </button>
-                    {focused === "compatibility" && (
-                      <>
-                        <div
-                          className="fixed inset-0 z-10"
-                          onClick={() => setFocused("")}
-                        />
-                        <div
-                          className="absolute z-20 mt-1 w-full rounded-2xl p-2 max-h-48 overflow-y-auto shadow-xl"
-                          style={{
-                            background: Colors.surface,
-                            border: `1px solid ${Colors.border}`,
-                          }}
-                        >
-                          {COMPATIBILITY_OPTIONS.map((device) => (
-                            <label
-                              key={device}
-                              className="flex items-center gap-2 px-3 py-2 rounded-xl cursor-pointer"
-                              style={{
-                                background: form.compatibility.includes(device)
-                                  ? Colors.primaryLight
-                                  : "transparent",
-                              }}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={form.compatibility.includes(device)}
-                                onChange={() => toggleCompatibility(device)}
-                                className="w-4 h-4 rounded accent-[#00A884]"
-                              />
-                              <span
-                                className="text-sm"
-                                style={{ color: Colors.textPrimary }}
-                              >
-                                {device}
-                              </span>
-                            </label>
-                          ))}
-                        </div>
-                      </>
-                    )}
+                    }}
+                  >
+                    <Boxes size={17} strokeWidth={2} />
                   </div>
-                </div>
+                  <select
+                    className={`${inputClass} appearance-none cursor-pointer`}
+                    style={{
+                      color: form.category
+                        ? Colors.textPrimary
+                        : Colors.textMuted,
+                      background: "transparent",
+                    }}
+                    value={form.category}
+                    onChange={(e) => set("category", e.target.value)}
+                    onFocus={() => setFocused("category")}
+                    onBlur={() => setFocused("")}
+                  >
+                    <option value="" disabled>
+                      Select category
+                    </option>
+                    {CATEGORIES.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.icon} {c.name}
+                      </option>
+                    ))}
+                  </select>
+                  <div
+                    className="absolute right-3.5 pointer-events-none"
+                    style={{ color: Colors.textMuted }}
+                  >
+                    <ChevronDown size={16} />
+                  </div>
+                </InputWrapper>
               </div>
 
-              {/* Price + Original Price */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="flex flex-col gap-1.5">
                   <FieldLabel>Selling Price (₹) *</FieldLabel>
@@ -1016,189 +820,7 @@ Wireless Bluetooth Earbuds,boAt,headphones-earphones,Wireless Earbuds,Bluetooth 
                 </div>
               </div>
 
-              {/* Color + Material */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <FieldLabel>Color</FieldLabel>
-                  <InputWrapper focused={focused === "color"}>
-                    <div
-                      className="absolute left-3.5"
-                      style={{
-                        color:
-                          focused === "color"
-                            ? Colors.primary
-                            : Colors.textMuted,
-                      }}
-                    >
-                      <Palette size={17} strokeWidth={2} />
-                    </div>
-                    <select
-                      className={`${inputClass} appearance-none cursor-pointer`}
-                      style={{
-                        color: form.color
-                          ? Colors.textPrimary
-                          : Colors.textMuted,
-                        background: "transparent",
-                      }}
-                      value={form.color}
-                      onChange={(e) => set("color", e.target.value)}
-                      onFocus={() => setFocused("color")}
-                      onBlur={() => setFocused("")}
-                    >
-                      <option value="">Select color</option>
-                      {COLORS.map((c) => (
-                        <option key={c} value={c}>
-                          {c}
-                        </option>
-                      ))}
-                    </select>
-                    <div
-                      className="absolute right-3.5 pointer-events-none"
-                      style={{ color: Colors.textMuted }}
-                    >
-                      <ChevronDown size={16} />
-                    </div>
-                  </InputWrapper>
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <FieldLabel>Material</FieldLabel>
-                  <InputWrapper focused={focused === "material"}>
-                    <div
-                      className="absolute left-3.5"
-                      style={{
-                        color:
-                          focused === "material"
-                            ? Colors.primary
-                            : Colors.textMuted,
-                      }}
-                    >
-                      <Shield size={17} strokeWidth={2} />
-                    </div>
-                    <select
-                      className={`${inputClass} appearance-none cursor-pointer`}
-                      style={{
-                        color: form.material
-                          ? Colors.textPrimary
-                          : Colors.textMuted,
-                        background: "transparent",
-                      }}
-                      value={form.material}
-                      onChange={(e) => set("material", e.target.value)}
-                      onFocus={() => setFocused("material")}
-                      onBlur={() => setFocused("")}
-                    >
-                      <option value="">Select material</option>
-                      {MATERIALS.map((m) => (
-                        <option key={m} value={m}>
-                          {m}
-                        </option>
-                      ))}
-                    </select>
-                    <div
-                      className="absolute right-3.5 pointer-events-none"
-                      style={{ color: Colors.textMuted }}
-                    >
-                      <ChevronDown size={16} />
-                    </div>
-                  </InputWrapper>
-                </div>
-              </div>
-
-              {/* Dimensions + Weight */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <FieldLabel>Dimensions</FieldLabel>
-                  <InputWrapper focused={focused === "dimensions"}>
-                    <div
-                      className="absolute left-3.5"
-                      style={{
-                        color:
-                          focused === "dimensions"
-                            ? Colors.primary
-                            : Colors.textMuted,
-                      }}
-                    >
-                      <Ruler size={17} strokeWidth={2} />
-                    </div>
-                    <input
-                      className={inputClass}
-                      style={inputStyle}
-                      placeholder="e.g. 10x5x2 cm"
-                      value={form.dimensions}
-                      onChange={(e) => set("dimensions", e.target.value)}
-                      onFocus={() => setFocused("dimensions")}
-                      onBlur={() => setFocused("")}
-                    />
-                  </InputWrapper>
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <FieldLabel>Weight</FieldLabel>
-                  <InputWrapper focused={focused === "weight"}>
-                    <div
-                      className="absolute left-3.5"
-                      style={{
-                        color:
-                          focused === "weight"
-                            ? Colors.primary
-                            : Colors.textMuted,
-                      }}
-                    >
-                      <Weight size={17} strokeWidth={2} />
-                    </div>
-                    <input
-                      className={inputClass}
-                      style={inputStyle}
-                      placeholder="e.g. 150g, 500mg"
-                      value={form.weight}
-                      onChange={(e) => set("weight", e.target.value)}
-                      onFocus={() => setFocused("weight")}
-                      onBlur={() => setFocused("")}
-                    />
-                  </InputWrapper>
-                </div>
-              </div>
-
-              {/* Warranty + Stock */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <FieldLabel>Warranty</FieldLabel>
-                  <InputWrapper focused={focused === "warranty"}>
-                    <div
-                      className="absolute left-3.5"
-                      style={{
-                        color:
-                          focused === "warranty"
-                            ? Colors.primary
-                            : Colors.textMuted,
-                      }}
-                    >
-                      <Shield size={17} strokeWidth={2} />
-                    </div>
-                    <select
-                      className={`${inputClass} appearance-none cursor-pointer`}
-                      style={{
-                        color: Colors.textPrimary,
-                        background: "transparent",
-                      }}
-                      value={form.warranty}
-                      onChange={(e) => set("warranty", e.target.value)}
-                      onFocus={() => setFocused("warranty")}
-                      onBlur={() => setFocused("")}
-                    >
-                      {WARRANTY_OPTIONS.map((w) => (
-                        <option key={w} value={w}>
-                          {w}
-                        </option>
-                      ))}
-                    </select>
-                    <div
-                      className="absolute right-3.5 pointer-events-none"
-                      style={{ color: Colors.textMuted }}
-                    >
-                      <ChevronDown size={16} />
-                    </div>
-                  </InputWrapper>
-                </div>
                 <div className="flex flex-col gap-1.5">
                   <FieldLabel>Stock Quantity *</FieldLabel>
                   <InputWrapper focused={focused === "stock"}>
@@ -1211,7 +833,7 @@ Wireless Bluetooth Earbuds,boAt,headphones-earphones,Wireless Earbuds,Bluetooth 
                             : Colors.textMuted,
                       }}
                     >
-                      <PackagePlus size={17} strokeWidth={2} />
+                      <Boxes size={17} strokeWidth={2} />
                     </div>
                     <input
                       className={inputClass}
@@ -1226,38 +848,35 @@ Wireless Bluetooth Earbuds,boAt,headphones-earphones,Wireless Earbuds,Bluetooth 
                     />
                   </InputWrapper>
                 </div>
+                <div className="flex flex-col gap-1.5">
+                  <FieldLabel>Min Order Quantity</FieldLabel>
+                  <InputWrapper focused={focused === "minOrderQty"}>
+                    <div
+                      className="absolute left-3.5"
+                      style={{
+                        color:
+                          focused === "minOrderQty"
+                            ? Colors.primary
+                            : Colors.textMuted,
+                      }}
+                    >
+                      <Boxes size={17} strokeWidth={2} />
+                    </div>
+                    <input
+                      className={inputClass}
+                      style={inputStyle}
+                      type="number"
+                      min="1"
+                      placeholder="1"
+                      value={form.minOrderQty}
+                      onChange={(e) => set("minOrderQty", e.target.value)}
+                      onFocus={() => setFocused("minOrderQty")}
+                      onBlur={() => setFocused("")}
+                    />
+                  </InputWrapper>
+                </div>
               </div>
 
-              {/* Min Order Qty */}
-              <div className="flex flex-col gap-1.5">
-                <FieldLabel>Min Order Quantity</FieldLabel>
-                <InputWrapper focused={focused === "minOrderQty"}>
-                  <div
-                    className="absolute left-3.5"
-                    style={{
-                      color:
-                        focused === "minOrderQty"
-                          ? Colors.primary
-                          : Colors.textMuted,
-                    }}
-                  >
-                    <PackagePlus size={17} strokeWidth={2} />
-                  </div>
-                  <input
-                    className={inputClass}
-                    style={inputStyle}
-                    type="number"
-                    min="1"
-                    placeholder="1"
-                    value={form.minOrderQty}
-                    onChange={(e) => set("minOrderQty", e.target.value)}
-                    onFocus={() => setFocused("minOrderQty")}
-                    onBlur={() => setFocused("")}
-                  />
-                </InputWrapper>
-              </div>
-
-              {/* Description */}
               <div className="flex flex-col gap-1.5">
                 <FieldLabel>Description</FieldLabel>
                 <div
@@ -1283,7 +902,7 @@ Wireless Bluetooth Earbuds,boAt,headphones-earphones,Wireless Earbuds,Bluetooth 
                     rows={3}
                     className="w-full bg-transparent pl-10 pr-4 py-3.5 text-sm outline-none resize-none"
                     style={{ color: Colors.textPrimary }}
-                    placeholder="Brief product description, features, usage notes…"
+                    placeholder="Brief product description..."
                     value={form.description}
                     onChange={(e) => set("description", e.target.value)}
                     onFocus={() => setFocused("desc")}
@@ -1292,60 +911,7 @@ Wireless Bluetooth Earbuds,boAt,headphones-earphones,Wireless Earbuds,Bluetooth 
                 </div>
               </div>
 
-              {/* Specifications */}
-              <div className="flex flex-col gap-1.5">
-                <div className="flex items-center justify-between">
-                  <FieldLabel>Technical Specifications</FieldLabel>
-                  <button
-                    onClick={addSpecification}
-                    className="flex items-center gap-1 text-xs font-semibold"
-                    style={{ color: Colors.primary }}
-                  >
-                    <Plus size={14} strokeWidth={2.5} /> Add Spec
-                  </button>
-                </div>
-                {form.specifications.map((spec, index) => (
-                  <div key={index} className="flex gap-2 items-start">
-                    <InputWrapper focused={focused === `spec-key-${index}`}>
-                      <input
-                        className={inputClass.replace("pl-10", "pl-4")}
-                        style={inputStyle}
-                        placeholder="e.g. Cable Length"
-                        value={spec.key}
-                        onChange={(e) =>
-                          updateSpecification(index, "key", e.target.value)
-                        }
-                        onFocus={() => setFocused(`spec-key-${index}`)}
-                        onBlur={() => setFocused("")}
-                      />
-                    </InputWrapper>
-                    <InputWrapper focused={focused === `spec-val-${index}`}>
-                      <input
-                        className={inputClass.replace("pl-10", "pl-4")}
-                        style={inputStyle}
-                        placeholder="e.g. 1.2m"
-                        value={spec.value}
-                        onChange={(e) =>
-                          updateSpecification(index, "value", e.target.value)
-                        }
-                        onFocus={() => setFocused(`spec-val-${index}`)}
-                        onBlur={() => setFocused("")}
-                      />
-                    </InputWrapper>
-                    {form.specifications.length > 1 && (
-                      <button
-                        onClick={() => removeSpecification(index)}
-                        className="p-3 rounded-xl"
-                        style={{ color: Colors.textMuted }}
-                      >
-                        <X size={16} />
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-
-              {/* Multiple Images Upload */}
+              {/* Single Product Images */}
               <div className="flex flex-col gap-1.5">
                 <div className="flex items-center justify-between">
                   <FieldLabel>Product Images (Max 8)</FieldLabel>
@@ -1361,7 +927,6 @@ Wireless Bluetooth Earbuds,boAt,headphones-earphones,Wireless Earbuds,Bluetooth 
                   multiple
                   onChange={handleImageFilesChange}
                 />
-
                 {imagePreviews.length > 0 ? (
                   <div className="flex flex-col gap-3">
                     <div className="grid grid-cols-4 gap-3">
@@ -1463,93 +1028,6 @@ Wireless Bluetooth Earbuds,boAt,headphones-earphones,Wireless Earbuds,Bluetooth 
                 )}
               </div>
 
-              {/* Product Tags */}
-              <div className="flex flex-col gap-1.5">
-                <FieldLabel>Product Tags</FieldLabel>
-                <TagSelector selectedTags={form.tags} onToggle={toggleTag} />
-              </div>
-
-              {/* ── Toggles ── */}
-              <div className="flex flex-col gap-3">
-                <div
-                  className="flex items-center justify-between px-4 py-3 rounded-2xl"
-                  style={{
-                    background: Colors.surfaceAlt,
-                    border: `1.5px solid ${Colors.border}`,
-                  }}
-                >
-                  <div className="flex items-center gap-2">
-                    <TrendingUp size={18} color={Colors.primary} />
-                    <div>
-                      <p
-                        className="text-sm font-semibold"
-                        style={{ color: Colors.textPrimary }}
-                      >
-                        Fast Moving Product
-                      </p>
-                      <p
-                        className="text-xs"
-                        style={{ color: Colors.textMuted }}
-                      >
-                        Highlight as a frequently purchased item
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => set("fastMoving", !form.fastMoving)}
-                    style={{
-                      color: form.fastMoving
-                        ? Colors.primary
-                        : Colors.textMuted,
-                    }}
-                  >
-                    {form.fastMoving ? (
-                      <ToggleRight size={36} strokeWidth={1.5} />
-                    ) : (
-                      <ToggleLeft size={36} strokeWidth={1.5} />
-                    )}
-                  </button>
-                </div>
-                <div
-                  className="flex items-center justify-between px-4 py-3 rounded-2xl"
-                  style={{
-                    background: Colors.surfaceAlt,
-                    border: `1.5px solid ${Colors.border}`,
-                  }}
-                >
-                  <div className="flex items-center gap-2">
-                    <Star size={18} color={Colors.warning} />
-                    <div>
-                      <p
-                        className="text-sm font-semibold"
-                        style={{ color: Colors.textPrimary }}
-                      >
-                        Featured Product
-                      </p>
-                      <p
-                        className="text-xs"
-                        style={{ color: Colors.textMuted }}
-                      >
-                        Show on homepage and featured sections
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => set("featured", !form.featured)}
-                    style={{
-                      color: form.featured ? Colors.primary : Colors.textMuted,
-                    }}
-                  >
-                    {form.featured ? (
-                      <ToggleRight size={36} strokeWidth={1.5} />
-                    ) : (
-                      <ToggleLeft size={36} strokeWidth={1.5} />
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              {/* Submit */}
               <button
                 onClick={handleSingleSubmit}
                 disabled={submitting}
@@ -1575,251 +1053,10 @@ Wireless Bluetooth Earbuds,boAt,headphones-earphones,Wireless Earbuds,Bluetooth 
                 )}
               </button>
             </div>
-
-            {/* ── Right: Preview Card ── */}
-            <div className="flex flex-col gap-4">
-              <div
-                className="rounded-3xl overflow-hidden"
-                style={{
-                  background: Colors.surface,
-                  border: `1px solid ${Colors.border}`,
-                  boxShadow: `0 4px 16px ${Colors.shadow}`,
-                }}
-              >
-                <div
-                  className="px-5 py-4"
-                  style={{ borderBottom: `1px solid ${Colors.divider}` }}
-                >
-                  <p
-                    className="text-sm font-bold"
-                    style={{ color: Colors.textPrimary }}
-                  >
-                    Product Preview
-                  </p>
-                </div>
-                <div
-                  className="mx-5 mt-5 rounded-2xl overflow-hidden flex items-center justify-center"
-                  style={{
-                    height: 200,
-                    background: Colors.surfaceAlt,
-                    border: `2px dashed ${Colors.border}`,
-                  }}
-                >
-                  {imagePreviews.length > 0 ? (
-                    <img
-                      src={imagePreviews[0]}
-                      alt="Product preview"
-                      className="w-full h-full object-contain"
-                      onError={() => removeImage(0)}
-                    />
-                  ) : (
-                    <div className="flex flex-col items-center gap-2">
-                      <Smartphone
-                        size={32}
-                        color={Colors.border}
-                        strokeWidth={1.5}
-                      />
-                      <p
-                        className="text-xs text-center px-4"
-                        style={{ color: Colors.textMuted }}
-                      >
-                        Upload images to preview
-                      </p>
-                    </div>
-                  )}
-                </div>
-                {imagePreviews.length > 1 && (
-                  <div className="flex gap-2 mx-5 mt-2 pb-2 overflow-x-auto">
-                    {imagePreviews.slice(1, 4).map((preview, i) => (
-                      <img
-                        key={i}
-                        src={preview}
-                        alt={`Preview ${i + 2}`}
-                        className="w-12 h-12 rounded-lg object-cover flex-shrink-0"
-                        style={{ border: `1px solid ${Colors.border}` }}
-                      />
-                    ))}
-                    {imagePreviews.length > 4 && (
-                      <div
-                        className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0"
-                        style={{
-                          background: Colors.surfaceAlt,
-                          border: `1px solid ${Colors.border}`,
-                        }}
-                      >
-                        <span
-                          className="text-xs"
-                          style={{ color: Colors.textMuted }}
-                        >
-                          +{imagePreviews.length - 4}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                )}
-                <div className="p-5 flex flex-col gap-2">
-                  <div>
-                    <p
-                      className="text-sm font-bold leading-snug"
-                      style={{ color: Colors.textPrimary }}
-                    >
-                      {form.name || (
-                        <span style={{ color: Colors.textMuted }}>
-                          Product Name
-                        </span>
-                      )}
-                    </p>
-                    {form.brand && (
-                      <p
-                        className="text-xs mt-0.5 font-medium"
-                        style={{ color: Colors.primary }}
-                      >
-                        {form.brand}
-                      </p>
-                    )}
-                  </div>
-                  {form.category && (
-                    <span
-                      className="text-xs font-medium px-2 py-0.5 rounded-lg w-fit"
-                      style={{
-                        background: Colors.primaryLight,
-                        color: Colors.primary,
-                      }}
-                    >
-                      {CATEGORIES.find((c) => c.id === form.category)?.name ||
-                        form.category}
-                      {form.subCategory && ` · ${form.subCategory}`}
-                    </span>
-                  )}
-                  <div className="flex items-baseline gap-2 mt-1">
-                    {form.price && (
-                      <p
-                        className="text-base font-bold"
-                        style={{ color: Colors.primary }}
-                      >
-                        ₹{form.price}
-                      </p>
-                    )}
-                    {form.originalPrice &&
-                      Number(form.originalPrice) > Number(form.price) && (
-                        <p
-                          className="text-xs line-through"
-                          style={{ color: Colors.textMuted }}
-                        >
-                          ₹{form.originalPrice}
-                        </p>
-                      )}
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {form.color && (
-                      <span
-                        className="text-xs px-2 py-0.5 rounded-md"
-                        style={{
-                          background: Colors.surfaceAlt,
-                          color: Colors.textSecondary,
-                        }}
-                      >
-                        {form.color}
-                      </span>
-                    )}
-                    {form.material && (
-                      <span
-                        className="text-xs px-2 py-0.5 rounded-md"
-                        style={{
-                          background: Colors.surfaceAlt,
-                          color: Colors.textSecondary,
-                        }}
-                      >
-                        {form.material}
-                      </span>
-                    )}
-                    {form.warranty !== "No Warranty" && (
-                      <span
-                        className="text-xs px-2 py-0.5 rounded-md"
-                        style={{
-                          background: Colors.surfaceAlt,
-                          color: Colors.textSecondary,
-                        }}
-                      >
-                        {form.warranty}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-1.5 mt-1">
-                    <div
-                      className="w-2 h-2 rounded-full"
-                      style={{
-                        background:
-                          Number(form.stock) > 0
-                            ? Colors.success
-                            : Colors.error,
-                      }}
-                    />
-                    <p className="text-xs" style={{ color: Colors.textMuted }}>
-                      {Number(form.stock) > 0
-                        ? `${form.stock} units in stock`
-                        : "Out of stock"}
-                    </p>
-                  </div>
-                  {form.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {form.tags.slice(0, 3).map((tagId) => {
-                        const tag = PRODUCT_TAGS.find((t) => t.id === tagId);
-                        return tag ? (
-                          <span
-                            key={tag.id}
-                            className="text-xs px-1.5 py-0.5 rounded-md"
-                            style={{
-                              background: tag.color + "20",
-                              color: tag.color,
-                            }}
-                          >
-                            {tag.name}
-                          </span>
-                        ) : null;
-                      })}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Tips */}
-              <div
-                className="rounded-3xl p-5 flex flex-col gap-2"
-                style={{
-                  background: Colors.primaryLight,
-                  border: `1px solid ${Colors.accentLight}`,
-                }}
-              >
-                <p
-                  className="text-xs font-bold uppercase tracking-wide"
-                  style={{ color: Colors.accent }}
-                >
-                  💡 Electronics Tips
-                </p>
-                {[
-                  "Add compatibility info to help customers",
-                  "Include technical specs like cable length, wattage",
-                  "First uploaded image becomes primary",
-                  "Use tags like 'Fast Charging', 'Wireless' for better discovery",
-                  "Original price shows discount when higher than selling price",
-                ].map((t) => (
-                  <p
-                    key={t}
-                    className="text-xs leading-relaxed"
-                    style={{ color: Colors.textSecondary }}
-                  >
-                    • {t}
-                  </p>
-                ))}
-              </div>
-            </div>
           </div>
         )}
 
-        {/* ════════════════════════════════════
-            TAB: BULK UPLOAD
-        ════════════════════════════════════ */}
+        {/* ═══ TAB: BULK UPLOAD ═══ */}
         {tab === "bulk" && (
           <div className="flex flex-col gap-5">
             <div
@@ -1840,10 +1077,10 @@ Wireless Bluetooth Earbuds,boAt,headphones-earphones,Wireless Earbuds,Bluetooth 
                   className="text-xs leading-relaxed"
                   style={{ color: Colors.textSecondary }}
                 >
-                  Download the electronics CSV template → fill in your products
-                  → upload below. Required: <strong>name</strong>,{" "}
-                  <strong>category</strong>, <strong>price</strong>,{" "}
-                  <strong>stock</strong>.
+                  Download CSV template → fill products → upload →{" "}
+                  <strong>add images below each product</strong>. Required:{" "}
+                  <strong>name</strong>, <strong>category</strong>,{" "}
+                  <strong>price</strong>, <strong>stock</strong>.
                 </p>
               </div>
               <button
@@ -1855,8 +1092,7 @@ Wireless Bluetooth Earbuds,boAt,headphones-earphones,Wireless Earbuds,Bluetooth 
                   boxShadow: `0 4px 12px rgba(0,168,132,0.3)`,
                 }}
               >
-                <Download size={16} strokeWidth={2} />
-                Download Template
+                <Download size={16} strokeWidth={2} /> Download Template
               </button>
             </div>
 
@@ -1941,7 +1177,15 @@ Wireless Bluetooth Earbuds,boAt,headphones-earphones,Wireless Earbuds,Bluetooth 
                       className="text-xs"
                       style={{ color: Colors.textSecondary }}
                     >
-                      Row {fr.row}: {JSON.stringify(fr.errors)}
+                      Row {fr.row}:{" "}
+                      {typeof fr.errors === "object"
+                        ? Object.entries(fr.errors)
+                            .map(
+                              ([field, msgs]) =>
+                                `${field}: ${(msgs as string[]).join(", ")}`,
+                            )
+                            .join(" | ")
+                        : JSON.stringify(fr.errors)}
                     </p>
                   ))}
                 </div>
@@ -1990,6 +1234,11 @@ Wireless Bluetooth Earbuds,boAt,headphones-earphones,Wireless Earbuds,Bluetooth 
                   </div>
                   <button
                     onClick={() => {
+                      bulkRows.forEach((r) =>
+                        r.images.forEach((img) =>
+                          URL.revokeObjectURL(img.preview),
+                        ),
+                      );
                       setBulkRows([]);
                       setBulkUploadResult(null);
                       bulkFileRef.current = null;
@@ -2001,8 +1250,9 @@ Wireless Bluetooth Earbuds,boAt,headphones-earphones,Wireless Earbuds,Bluetooth 
                   </button>
                 </div>
 
+                {/* Table */}
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[1000px]">
+                  <table className="w-full min-w-[800px]">
                     <thead>
                       <tr style={{ background: Colors.surfaceAlt }}>
                         {[
@@ -2010,11 +1260,9 @@ Wireless Bluetooth Earbuds,boAt,headphones-earphones,Wireless Earbuds,Bluetooth 
                           "Name",
                           "Brand",
                           "Category",
-                          "Type",
                           "Price",
                           "Stock",
-                          "Compatibility",
-                          "Tags",
+                          "Images",
                           "",
                         ].map((h) => (
                           <th
@@ -2029,118 +1277,242 @@ Wireless Bluetooth Earbuds,boAt,headphones-earphones,Wireless Earbuds,Bluetooth 
                     </thead>
                     <tbody>
                       {bulkRows.map((row) => (
-                        <tr
-                          key={row.id}
-                          style={{
-                            borderTop: `1px solid ${Colors.divider}`,
-                            background:
-                              row.status === "error"
-                                ? "#FFF5F6"
-                                : "transparent",
-                          }}
-                        >
-                          <td className="px-4 py-3">
-                            {row.status === "valid" ? (
-                              <CheckCircle2
-                                size={16}
-                                color={Colors.success}
-                                strokeWidth={2.5}
-                              />
-                            ) : (
-                              <div className="flex items-center gap-1">
-                                <AlertCircle
+                        <>
+                          <tr
+                            key={row.id}
+                            style={{
+                              borderTop: `1px solid ${Colors.divider}`,
+                              background:
+                                row.status === "error"
+                                  ? "#FFF5F6"
+                                  : "transparent",
+                            }}
+                          >
+                            <td className="px-4 py-3">
+                              {row.status === "valid" ? (
+                                <CheckCircle2
                                   size={16}
-                                  color={Colors.error}
+                                  color={Colors.success}
                                   strokeWidth={2.5}
                                 />
-                                <span
-                                  className="text-xs"
-                                  style={{ color: Colors.error }}
-                                >
-                                  {row.error}
-                                </span>
-                              </div>
-                            )}
-                          </td>
-                          <td
-                            className="px-4 py-3 text-sm font-medium max-w-[180px] truncate"
-                            style={{ color: Colors.textPrimary }}
-                          >
-                            {row.name || "—"}
-                          </td>
-                          <td
-                            className="px-4 py-3 text-sm max-w-[120px] truncate"
-                            style={{ color: Colors.textSecondary }}
-                          >
-                            {row.brand || "—"}
-                          </td>
-                          <td
-                            className="px-4 py-3 text-sm"
-                            style={{ color: Colors.textSecondary }}
-                          >
-                            {row.category || "—"}
-                            {row.subCategory && (
-                              <span
-                                className="text-xs block"
+                              ) : (
+                                <div className="flex items-center gap-1">
+                                  <AlertCircle
+                                    size={16}
+                                    color={Colors.error}
+                                    strokeWidth={2.5}
+                                  />
+                                  <span
+                                    className="text-xs"
+                                    style={{ color: Colors.error }}
+                                  >
+                                    {row.error}
+                                  </span>
+                                </div>
+                              )}
+                            </td>
+                            <td
+                              className="px-4 py-3 text-sm font-medium max-w-[180px] truncate"
+                              style={{ color: Colors.textPrimary }}
+                            >
+                              {row.name || "—"}
+                            </td>
+                            <td
+                              className="px-4 py-3 text-sm max-w-[120px] truncate"
+                              style={{ color: Colors.textSecondary }}
+                            >
+                              {row.brand || "—"}
+                            </td>
+                            <td
+                              className="px-4 py-3 text-sm"
+                              style={{ color: Colors.textSecondary }}
+                            >
+                              {row.category || "—"}
+                            </td>
+                            <td
+                              className="px-4 py-3 text-sm font-semibold"
+                              style={{ color: Colors.primary }}
+                            >
+                              {row.price ? `₹${row.price}` : "—"}
+                            </td>
+                            <td
+                              className="px-4 py-3 text-sm"
+                              style={{ color: Colors.textSecondary }}
+                            >
+                              {row.stock || "—"}
+                            </td>
+                            <td className="px-4 py-3">
+                              <button
+                                onClick={() => toggleRowExpand(row.id)}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all"
+                                style={{
+                                  background:
+                                    row.images.length > 0
+                                      ? Colors.primaryLight
+                                      : Colors.surfaceAlt,
+                                  color:
+                                    row.images.length > 0
+                                      ? Colors.primary
+                                      : Colors.textSecondary,
+                                  border: `1px solid ${Colors.border}`,
+                                }}
+                              >
+                                <ImagePlus size={14} strokeWidth={2} />
+                                {row.images.length > 0
+                                  ? `${row.images.length} images`
+                                  : "Add Images"}
+                                <ChevronDown
+                                  size={12}
+                                  style={{
+                                    transform: row.expanded
+                                      ? "rotate(180deg)"
+                                      : "none",
+                                    transition: "transform 0.2s",
+                                  }}
+                                />
+                              </button>
+                            </td>
+                            <td className="px-4 py-3">
+                              <button
+                                onClick={() => removeRow(row.id)}
+                                className="p-1.5 rounded-lg"
                                 style={{ color: Colors.textMuted }}
                               >
-                                {row.subCategory}
-                              </span>
-                            )}
-                          </td>
-                          <td
-                            className="px-4 py-3 text-sm"
-                            style={{ color: Colors.textSecondary }}
-                          >
-                            {row.type || "—"}
-                          </td>
-                          <td
-                            className="px-4 py-3 text-sm font-semibold"
-                            style={{ color: Colors.primary }}
-                          >
-                            {row.price ? `₹${row.price}` : "—"}
-                          </td>
-                          <td
-                            className="px-4 py-3 text-sm"
-                            style={{ color: Colors.textSecondary }}
-                          >
-                            {row.stock || "—"}
-                          </td>
-                          <td
-                            className="px-4 py-3 text-sm max-w-[150px] truncate"
-                            style={{ color: Colors.textSecondary }}
-                          >
-                            {row.compatibility || "—"}
-                          </td>
-                          <td className="px-4 py-3">
-                            {row.tags
-                              ? row.tags
-                                  .split(",")
-                                  .slice(0, 2)
-                                  .map((tag) => (
-                                    <span
-                                      key={tag}
-                                      className="text-xs px-1.5 py-0.5 rounded-md mr-1"
-                                      style={{
-                                        background: Colors.surfaceAlt,
-                                        color: Colors.textSecondary,
-                                      }}
-                                    >
-                                      {tag.trim()}
-                                    </span>
-                                  ))
-                              : "—"}
-                          </td>
-                          <td className="px-4 py-3">
-                            <button
-                              onClick={() => removeRow(row.id)}
-                              className="p-1.5 rounded-lg"
-                              style={{ color: Colors.textMuted }}
+                                <Trash2 size={15} strokeWidth={2} />
+                              </button>
+                            </td>
+                          </tr>
+
+                          {/* Expanded Image Section */}
+                          {row.expanded && row.status === "valid" && (
+                            <tr
+                              key={`${row.id}-images`}
+                              style={{
+                                background: Colors.surfaceAlt,
+                                borderTop: `1px solid ${Colors.divider}`,
+                              }}
                             >
-                              <Trash2 size={15} strokeWidth={2} />
-                            </button>
-                          </td>
-                        </tr>
+                              <td colSpan={8} className="px-4 py-4">
+                                <div className="flex flex-col gap-3">
+                                  <div className="flex items-center justify-between">
+                                    <p
+                                      className="text-xs font-semibold"
+                                      style={{ color: Colors.textSecondary }}
+                                    >
+                                      Images for:{" "}
+                                      <span
+                                        style={{ color: Colors.textPrimary }}
+                                      >
+                                        {row.name}
+                                      </span>{" "}
+                                      ({row.images.length}/8)
+                                    </p>
+                                    {row.images.length < 8 && (
+                                      <label
+                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold cursor-pointer"
+                                        style={{
+                                          background: Colors.primaryLight,
+                                          color: Colors.primary,
+                                          border: `1px solid ${Colors.accentLight}`,
+                                        }}
+                                      >
+                                        <Plus size={14} strokeWidth={2.5} /> Add
+                                        Images
+                                        <input
+                                          type="file"
+                                          accept="image/jpeg,image/png,image/webp"
+                                          multiple
+                                          className="hidden"
+                                          onChange={(e) => {
+                                            if (e.target.files) {
+                                              addImagesToRow(
+                                                row.id,
+                                                e.target.files,
+                                              );
+                                              e.target.value = "";
+                                            }
+                                          }}
+                                        />
+                                      </label>
+                                    )}
+                                  </div>
+
+                                  {row.images.length > 0 ? (
+                                    <div className="grid grid-cols-6 gap-3">
+                                      {row.images.map((img, imgIndex) => (
+                                        <div
+                                          key={imgIndex}
+                                          className="relative group"
+                                        >
+                                          <div
+                                            className="relative rounded-xl overflow-hidden aspect-square cursor-pointer"
+                                            style={{
+                                              border: `2px solid ${img.isPrimary ? Colors.primary : Colors.border}`,
+                                            }}
+                                            onClick={() =>
+                                              setBulkImagePrimary(
+                                                row.id,
+                                                imgIndex,
+                                              )
+                                            }
+                                          >
+                                            <img
+                                              src={img.preview}
+                                              alt={`${row.name} ${imgIndex + 1}`}
+                                              className="w-full h-full object-cover"
+                                            />
+                                            {img.isPrimary && (
+                                              <span
+                                                className="absolute top-1 left-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold"
+                                                style={{
+                                                  background: Colors.primary,
+                                                  color: Colors.white,
+                                                }}
+                                              >
+                                                Primary
+                                              </span>
+                                            )}
+                                            <div className="absolute inset-0 bg-black/10 bg-opacity-0 group-hover:bg-opacity-30 transition-all duration-200 flex items-center justify-center">
+                                              <span className="text-white text-[10px] font-semibold opacity-0 group-hover:opacity-100">
+                                                Set Primary
+                                              </span>
+                                            </div>
+                                          </div>
+                                          <button
+                                            onClick={() =>
+                                              removeBulkImage(row.id, imgIndex)
+                                            }
+                                            className="absolute -top-2 -right-2 w-5 h-5 rounded-full flex items-center justify-center z-10"
+                                            style={{
+                                              background: Colors.error,
+                                              color: Colors.white,
+                                            }}
+                                          >
+                                            <X size={10} strokeWidth={3} />
+                                          </button>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <div className="text-center py-4">
+                                      <ImageIcon
+                                        size={24}
+                                        color={Colors.border}
+                                        strokeWidth={1.5}
+                                      />
+                                      <p
+                                        className="text-xs mt-1"
+                                        style={{ color: Colors.textMuted }}
+                                      >
+                                        No images added yet
+                                      </p>
+                                    </div>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </>
                       ))}
                     </tbody>
                   </table>
@@ -2187,14 +1559,6 @@ Wireless Bluetooth Earbuds,boAt,headphones-earphones,Wireless Earbuds,Bluetooth 
           </div>
         )}
       </div>
-
-      <style>{`
-        @keyframes slideUp { from { transform: translateY(16px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-        input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
-        input::placeholder, textarea::placeholder { color: ${Colors.textMuted}; }
-        select option { color: ${Colors.textPrimary}; background: ${Colors.surface}; }
-        * { scrollbar-width: thin; scrollbar-color: ${Colors.border} transparent; }
-      `}</style>
     </>
   );
 }

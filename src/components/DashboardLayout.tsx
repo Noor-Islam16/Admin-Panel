@@ -14,6 +14,7 @@ import {
 import Colors from "../constants/colors";
 import { adminRoutes } from "../config/routes.config";
 import { AdminAPI } from "../config/api";
+import icon from "../assets/logo.png";
 
 const NAV_ITEMS = [
   {
@@ -104,7 +105,11 @@ export default function DashboardLayout() {
               backdropFilter: "blur(8px)",
             }}
           >
-            <ShieldCheck size={22} color={Colors.white} strokeWidth={1.8} />
+            <img
+              src={icon}
+              alt="logo"
+              style={{ width: 60, height: 40, objectFit: "contain" }}
+            />
           </div>
           <div>
             <p
@@ -117,7 +122,7 @@ export default function DashboardLayout() {
               className="text-sm font-bold leading-tight"
               style={{ color: Colors.white }}
             >
-              JholeSalers
+              Thump Beyond Limits
             </p>
           </div>
         </div>

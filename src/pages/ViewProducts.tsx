@@ -4,8 +4,6 @@ import {
   Search,
   LayoutGrid,
   LayoutList,
-  ToggleLeft,
-  ToggleRight,
   Pencil,
   Trash2,
   AlertTriangle,
@@ -14,27 +12,16 @@ import {
   Tag,
   IndianRupee,
   AlignLeft,
-  PackagePlus,
   CheckCircle2,
   ImageOff,
   Filter,
-  Star,
-  TrendingUp,
-  Flame,
   RefreshCw,
   Smartphone,
-  Cpu,
-  Shield,
-  Cable,
-  Monitor,
-  Palette,
+  Boxes,
+  Plus,
 } from "lucide-react";
 import Colors from "../constants/colors";
-import {
-  CATEGORIES,
-  PRODUCT_TAGS,
-  WARRANTY_OPTIONS,
-} from "../constants/products";
+import { CATEGORIES } from "../constants/products";
 import { ProductAPI, StockAPI, type ApiProduct } from "../config/api";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -50,12 +37,6 @@ function stockStatus(p: ApiProduct): {
       label: `Low (${p.stockQuantity})`,
       color: Colors.warning,
       bg: `${Colors.warning}18`,
-    };
-  if (p.isFastMoving)
-    return {
-      label: `${p.stockQuantity} units`,
-      color: Colors.info,
-      bg: `${Colors.info}18`,
     };
   return {
     label: `${p.stockQuantity} units`,
@@ -136,7 +117,7 @@ function Toast({
   );
 }
 
-// ── Product Image (Supports multiple images) ──────────────────────────────────
+// ── Product Image ─────────────────────────────────────────────────────────────
 function ProductImage({
   images,
   name,
@@ -151,7 +132,6 @@ function ProductImage({
   const [err, setErr] = useState(false);
   const primaryImage =
     images?.find((img) => img.isPrimary)?.url || images?.[0]?.url;
-
   if (!primaryImage || err) {
     return (
       <div
@@ -171,7 +151,6 @@ function ProductImage({
       </div>
     );
   }
-
   if (fill) {
     return (
       <img
@@ -188,7 +167,6 @@ function ProductImage({
       />
     );
   }
-
   return (
     <img
       src={primaryImage}
@@ -197,25 +175,6 @@ function ProductImage({
       className="rounded-2xl object-cover flex-shrink-0"
       style={{ width: size, height: size, background: Colors.surfaceAlt }}
     />
-  );
-}
-
-// ── Tag Badge ─────────────────────────────────────────────────────────────────
-function TagBadge({ tagId }: { tagId: string }) {
-  const tag = PRODUCT_TAGS.find((t) => t.id === tagId);
-  if (!tag) return null;
-
-  return (
-    <span
-      className="text-xs px-2 py-0.5 rounded-lg font-medium whitespace-nowrap"
-      style={{
-        background: tag.color + "18",
-        color: tag.color,
-        border: `1px solid ${tag.color}30`,
-      }}
-    >
-      {tag.name}
-    </span>
   );
 }
 
@@ -306,7 +265,6 @@ function DeleteModal({
   );
 }
 
-// ── Spinner ───────────────────────────────────────────────────────────────────
 function Spinner() {
   return (
     <svg
@@ -333,7 +291,6 @@ function Spinner() {
   );
 }
 
-// ── Skeleton rows / cards ─────────────────────────────────────────────────────
 function SkeletonCard() {
   return (
     <div
@@ -368,7 +325,7 @@ function SkeletonCard() {
 function SkeletonRow() {
   return (
     <tr style={{ borderTop: `1px solid ${Colors.divider}` }}>
-      {Array.from({ length: 11 }).map((_, i) => (
+      {Array.from({ length: 8 }).map((_, i) => (
         <td key={i} className="px-5 py-4">
           <div
             className="h-4 rounded-lg animate-pulse"
@@ -380,7 +337,7 @@ function SkeletonRow() {
   );
 }
 
-// ── Edit Modal (Updated for Electronics) ──────────────────────────────────────
+// ── Edit Modal (FULLY FIXED with Image Management) ────────────────────────────
 function EditModal({
   product,
   onSave,
@@ -394,31 +351,133 @@ function EditModal({
     name: product.name,
     brand: product.brand ?? "",
     category: product.category,
-    subCategory: product.subCategory ?? "",
-    type: product.type ?? "",
-    compatibility: product.compatibility ?? [],
     sellingPrice: String(product.sellingPrice),
     originalPrice:
       product.originalPrice != null ? String(product.originalPrice) : "",
-    color: product.color ?? "",
-    material: product.material ?? "",
-    dimensions: product.dimensions ?? "",
-    weight: product.weight ?? "",
-    warranty: product.warranty ?? "No Warranty",
     stockQuantity: String(product.stockQuantity),
     minOrderQuantity: String(product.minOrderQuantity),
     description: product.description ?? "",
-    isFastMoving: product.isFastMoving,
-    isFeatured: product.isFeatured,
   });
   const [focused, setFocused] = useState("");
   const [saving, setSaving] = useState(false);
-  const [imageFiles, setImageFiles] = useState<File[]>([]);
+
+  // Image management - use a single source of truth
+  const [allImages, setAllImages] = useState<
+    Array<{
+      id: string; // unique identifier
+      url: string; // display URL
+      publicId?: string; // Cloudinary public ID (only for existing)
+      isPrimary: boolean;
+      isNew: boolean; // true if newly added file
+      file?: File; // the actual File object for new images
+    }>
+  >(() => {
+    // Initialize from existing product images
+    return (product.images || []).map((img, index) => ({
+      id: img.publicId || `existing-${index}`,
+      url: img.url,
+      publicId: img.publicId,
+      isPrimary: img.isPrimary,
+      isNew: false,
+    }));
+  });
+
+  const [deletedPublicIds, setDeletedPublicIds] = useState<string[]>([]);
   const imageRef = useRef<HTMLInputElement>(null);
 
-  const set = (key: keyof typeof form, val: string | boolean | string[]) =>
+  const set = (key: keyof typeof form, val: string) =>
     setForm((prev) => ({ ...prev, [key]: val }));
 
+  // ── Add new images ───────────────────────────────────────────────────────
+  const handleAddImages = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    const currentCount = allImages.length - deletedPublicIds.length;
+    if (currentCount + files.length > 8) {
+      alert("Maximum 8 images allowed");
+      return;
+    }
+
+    const newImages = files.map((file, index) => ({
+      id: `new-${Date.now()}-${index}`,
+      url: URL.createObjectURL(file),
+      isPrimary: allImages.length === 0 && deletedPublicIds.length === 0, // First image if no others
+      isNew: true,
+      file: file,
+    }));
+
+    setAllImages((prev) => [...prev, ...newImages]);
+    // Reset input
+    if (imageRef.current) imageRef.current.value = "";
+  };
+
+  // ── Remove an image ─────────────────────────────────────────────────────
+  const handleRemoveImage = (imageId: string) => {
+    const image = allImages.find((img) => img.id === imageId);
+    if (!image) return;
+
+    // Check if we'd have at least 1 image remaining
+    const remainingCount = allImages.filter(
+      (img) =>
+        img.id !== imageId && !deletedPublicIds.includes(img.publicId || ""),
+    ).length;
+
+    if (remainingCount < 1) {
+      alert("Product must have at least one image");
+      return;
+    }
+
+    if (image.isNew) {
+      // Revoke object URL to prevent memory leak
+      if (image.url.startsWith("blob:")) {
+        URL.revokeObjectURL(image.url);
+      }
+      // Remove from allImages
+      setAllImages((prev) => prev.filter((img) => img.id !== imageId));
+    } else if (image.publicId) {
+      // Mark for deletion
+      setDeletedPublicIds((prev) => [...prev, image.publicId!]);
+    }
+
+    // If removed image was primary, set first remaining as primary
+    if (image.isPrimary) {
+      setAllImages((prev) => {
+        const remaining = prev.filter(
+          (img) =>
+            img.id !== imageId &&
+            (!image.publicId || !deletedPublicIds.includes(image.publicId)),
+        );
+        if (remaining.length > 0 && !image.isNew) {
+          // Find first non-deleted image to make primary
+          const newPrimary = prev.find(
+            (img) =>
+              img.id !== imageId &&
+              (!img.publicId || !deletedPublicIds.includes(img.publicId)),
+          );
+          if (newPrimary) {
+            return prev.map((img) => ({
+              ...img,
+              isPrimary: img.id === newPrimary.id,
+            }));
+          }
+        }
+        return remaining;
+      });
+    }
+  };
+
+  // ── Set image as primary ────────────────────────────────────────────────
+  const handleSetPrimary = (imageId: string) => {
+    setAllImages((prev) =>
+      prev.map((img) => ({
+        ...img,
+        isPrimary: img.id === imageId,
+      })),
+    );
+  };
+
+  // ── Save ─────────────────────────────────────────────────────────────────
   const handleSave = async () => {
     if (!form.name.trim()) return;
     setSaving(true);
@@ -428,31 +487,51 @@ function EditModal({
       fd.append("category", form.category);
       fd.append("sellingPrice", form.sellingPrice);
       fd.append("stockQuantity", form.stockQuantity);
-      fd.append("warranty", form.warranty);
-      fd.append("isFastMoving", String(form.isFastMoving));
-      fd.append("isFeatured", String(form.isFeatured));
-
-      if (form.brand) fd.append("brand", form.brand);
-      if (form.subCategory) fd.append("subCategory", form.subCategory);
-      if (form.type) fd.append("type", form.type);
-      if (form.compatibility.length)
-        fd.append("compatibility", form.compatibility.join(","));
+      fd.append("minOrderQuantity", form.minOrderQuantity);
+      if (form.brand.trim()) fd.append("brand", form.brand.trim());
       if (form.originalPrice) fd.append("originalPrice", form.originalPrice);
-      if (form.color) fd.append("color", form.color);
-      if (form.material) fd.append("material", form.material);
-      if (form.dimensions) fd.append("dimensions", form.dimensions);
-      if (form.weight) fd.append("weight", form.weight);
-      if (form.description) fd.append("description", form.description);
-      if (form.minOrderQuantity)
-        fd.append("minOrderQuantity", form.minOrderQuantity);
+      if (form.description.trim())
+        fd.append("description", form.description.trim());
 
-      // Append new images if any
-      imageFiles.forEach((file) => fd.append("images", file));
+      // Send deleted image IDs
+      if (deletedPublicIds.length > 0) {
+        fd.append("deletedImages", JSON.stringify(deletedPublicIds));
+      }
+
+      // Send updated primary image info for existing images
+      const existingPrimary = allImages.find(
+        (img) => !img.isNew && img.isPrimary,
+      );
+      if (existingPrimary?.publicId) {
+        fd.append("primaryImageId", existingPrimary.publicId);
+      }
+
+      // Send existing images order (for reordering if needed)
+      const existingImageIds = allImages
+        .filter((img) => !img.isNew && img.publicId)
+        .map((img) => img.publicId);
+      fd.append("imageOrder", JSON.stringify(existingImageIds));
+
+      // Append new image files
+      const newFiles = allImages.filter((img) => img.isNew && img.file);
+      newFiles.forEach((img, _index) => {
+        fd.append("images", img.file!, img.file!.name);
+      });
+
+      // If first new image should be primary
+      if (newFiles.length > 0) {
+        const hasExistingImages = allImages.some(
+          (img) => !img.isNew && !deletedPublicIds.includes(img.publicId || ""),
+        );
+        if (!hasExistingImages && newFiles[0].isPrimary) {
+          fd.append("firstNewIsPrimary", "true");
+        }
+      }
 
       const res = await ProductAPI.update(product._id, fd);
       onSave(res.data);
     } catch (e) {
-      throw e;
+      alert(e instanceof Error ? e.message : "Failed to update product.");
     } finally {
       setSaving(false);
     }
@@ -461,8 +540,11 @@ function EditModal({
   const inputClass =
     "w-full bg-transparent pl-10 pr-4 py-3 text-sm outline-none";
   const inputStyle = { color: Colors.textPrimary };
-  const availableSubcategories =
-    CATEGORIES.find((c) => c.id === form.category)?.subcategories || [];
+
+  // Get visible images
+  const visibleImages = allImages.filter(
+    (img) => img.isNew || !deletedPublicIds.includes(img.publicId || ""),
+  );
 
   return (
     <div
@@ -470,7 +552,7 @@ function EditModal({
       style={{ background: Colors.overlay }}
     >
       <div
-        className="w-full max-w-2xl rounded-3xl overflow-hidden"
+        className="w-full max-w-lg rounded-3xl overflow-hidden"
         style={{
           background: Colors.surface,
           boxShadow: "0 24px 64px rgba(0,0,0,0.22)",
@@ -487,9 +569,7 @@ function EditModal({
         >
           <div className="flex items-center gap-2">
             <Pencil size={18} color={Colors.white} strokeWidth={2} />
-            <p className="text-base font-bold" style={{ color: Colors.white }}>
-              Edit Electronics Accessory
-            </p>
+            <p className="text-base font-bold text-white">Edit Product</p>
           </div>
           <button
             onClick={onClose}
@@ -504,66 +584,155 @@ function EditModal({
         </div>
 
         <div className="p-6 flex flex-col gap-4">
-          {/* Current Images Preview */}
-          {product.images && product.images.length > 0 && (
-            <div className="flex gap-2 overflow-x-auto pb-2">
-              {product.images.map((img, i) => (
-                <div key={i} className="relative flex-shrink-0">
-                  <img
-                    src={img.url}
-                    alt={img.altText || `${product.name} ${i + 1}`}
-                    className="w-16 h-16 rounded-xl object-cover"
+          {/* ═══ IMAGE MANAGEMENT ═══ */}
+          <div
+            className="rounded-2xl p-4"
+            style={{
+              background: Colors.surfaceAlt,
+              border: `1.5px solid ${Colors.border}`,
+            }}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <FieldLabel>Product Images ({visibleImages.length}/8)</FieldLabel>
+              {visibleImages.length < 8 && (
+                <>
+                  <button
+                    onClick={() => imageRef.current?.click()}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold"
                     style={{
-                      border: img.isPrimary
-                        ? `2px solid ${Colors.primary}`
-                        : `1px solid ${Colors.border}`,
+                      background: Colors.primaryLight,
+                      color: Colors.primary,
+                      border: `1px solid ${Colors.accentLight}`,
                     }}
+                  >
+                    <Plus size={14} strokeWidth={2.5} /> Add Images
+                  </button>
+                  <input
+                    ref={imageRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    multiple
+                    className="hidden"
+                    onChange={handleAddImages}
                   />
-                  {img.isPrimary && (
-                    <span
-                      className="absolute -top-1 -right-1 px-1 py-0.5 rounded text-[9px] font-bold"
-                      style={{
-                        background: Colors.primary,
-                        color: Colors.white,
-                      }}
-                    >
-                      Primary
-                    </span>
-                  )}
-                </div>
-              ))}
+                </>
+              )}
             </div>
-          )}
 
-          {/* Add New Images */}
-          <div className="flex items-center gap-4">
-            <input
-              ref={imageRef}
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              multiple
-              className="hidden"
-              onChange={(e) => {
-                const files = Array.from(e.target.files || []);
-                setImageFiles((prev) => [...prev, ...files]);
-              }}
-            />
-            <button
-              onClick={() => imageRef.current?.click()}
-              className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold"
-              style={{
-                background: Colors.primaryLight,
-                color: Colors.primary,
-                border: `1px solid ${Colors.accentLight}`,
-              }}
+            {visibleImages.length > 0 ? (
+              <div className="grid grid-cols-4 gap-3">
+                {visibleImages.map((img) => (
+                  <div key={img.id} className="relative group">
+                    {/* Image container */}
+                    <div
+                      className="relative rounded-xl overflow-hidden aspect-square cursor-pointer transition-all duration-200"
+                      style={{
+                        border: `2px solid ${img.isPrimary ? Colors.primary : img.isNew ? Colors.warning : Colors.border}`,
+                        boxShadow: img.isPrimary
+                          ? `0 0 0 2px ${Colors.primaryLight}`
+                          : "none",
+                      }}
+                      onClick={() => handleSetPrimary(img.id)}
+                    >
+                      <img
+                        src={img.url}
+                        alt={`Product image`}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          // Fallback for broken images
+                          (e.target as HTMLImageElement).src =
+                            "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Crect fill='%23ddd' width='100' height='100'/%3E%3Ctext x='50' y='55' text-anchor='middle' fill='%23999' font-size='12'%3ENo Img%3C/text%3E%3C/svg%3E";
+                        }}
+                      />
+
+                      {/* Badges */}
+                      {img.isPrimary && (
+                        <span
+                          className="absolute top-1 left-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold"
+                          style={{
+                            background: Colors.primary,
+                            color: Colors.white,
+                          }}
+                        >
+                          Primary
+                        </span>
+                      )}
+                      {img.isNew && (
+                        <span
+                          className="absolute top-1 left-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold"
+                          style={{
+                            background: Colors.warning,
+                            color: Colors.white,
+                          }}
+                        >
+                          New
+                        </span>
+                      )}
+
+                      {/* Hover overlay */}
+                      <div className="absolute inset-0 bg-black/10 group-hover:bg-opacity-30 transition-all duration-200 flex items-center justify-center">
+                        <span className="text-white text-[10px] font-semibold opacity-0 group-hover:opacity-100 transition-opacity duration-200 text-center px-1">
+                          {img.isPrimary ? "Primary Image" : "Set as Primary"}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Remove button */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRemoveImage(img.id);
+                      }}
+                      className="absolute -top-2 -right-2 w-5 h-5 rounded-full flex items-center justify-center z-10"
+                      style={{ background: Colors.error, color: Colors.white }}
+                      title="Remove image"
+                    >
+                      <X size={10} strokeWidth={3} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <button
+                onClick={() => imageRef.current?.click()}
+                className="w-full py-8 rounded-xl flex flex-col items-center justify-center gap-2 transition-all border-2 border-dashed"
+                style={{
+                  borderColor: Colors.border,
+                  background: Colors.surface,
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = Colors.primary;
+                  e.currentTarget.style.background = Colors.primaryLight;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = Colors.border;
+                  e.currentTarget.style.background = Colors.surface;
+                }}
+              >
+                <ImageOff
+                  size={28}
+                  color={Colors.textMuted}
+                  strokeWidth={1.5}
+                />
+                <span
+                  className="text-xs font-semibold"
+                  style={{ color: Colors.textMuted }}
+                >
+                  Click to add images
+                </span>
+              </button>
+            )}
+
+            <p
+              className="text-[10px] mt-2 text-center"
+              style={{ color: Colors.textMuted }}
             >
-              <PackagePlus size={14} strokeWidth={2} />
-              {imageFiles.length > 0
-                ? `${imageFiles.length} images selected`
-                : "Add New Images"}
-            </button>
+              Click image to set as primary · Green border = primary · Yellow
+              border = new (unsaved)
+            </p>
           </div>
 
+          {/* ═══ PRODUCT DETAILS ═══ */}
           {/* Name + Brand */}
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
@@ -581,7 +750,7 @@ function EditModal({
             </div>
             <div className="flex flex-col gap-1.5">
               <FieldLabel>Brand</FieldLabel>
-              <InputBox focused={focused === "brand"} icon={Cpu}>
+              <InputBox focused={focused === "brand"} icon={Tag}>
                 <input
                   className={inputClass}
                   style={inputStyle}
@@ -594,111 +763,37 @@ function EditModal({
             </div>
           </div>
 
-          {/* Category + SubCategory */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1.5">
-              <FieldLabel>Category</FieldLabel>
-              <InputBox focused={focused === "cat"} icon={Monitor}>
-                <select
-                  className="w-full bg-transparent pl-10 pr-8 py-3 text-sm outline-none appearance-none cursor-pointer"
-                  style={{ color: Colors.textPrimary }}
-                  value={form.category}
-                  onChange={(e) => {
-                    set("category", e.target.value);
-                    set("subCategory", "");
-                  }}
-                  onFocus={() => setFocused("cat")}
-                  onBlur={() => setFocused("")}
-                >
-                  {CATEGORIES.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.icon} {c.name}
-                    </option>
-                  ))}
-                </select>
-                <div
-                  className="absolute right-3 pointer-events-none"
-                  style={{ color: Colors.textMuted }}
-                >
-                  <ChevronDown size={15} />
-                </div>
-              </InputBox>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <FieldLabel>Sub Category</FieldLabel>
-              <InputBox focused={focused === "subCat"} icon={Cable}>
-                <select
-                  className="w-full bg-transparent pl-10 pr-8 py-3 text-sm outline-none appearance-none cursor-pointer"
-                  style={{ color: Colors.textPrimary }}
-                  value={form.subCategory}
-                  onChange={(e) => set("subCategory", e.target.value)}
-                  onFocus={() => setFocused("subCat")}
-                  onBlur={() => setFocused("")}
-                  disabled={!form.category}
-                >
-                  <option value="">Select sub category</option>
-                  {availableSubcategories.map((sc) => (
-                    <option key={sc} value={sc}>
-                      {sc}
-                    </option>
-                  ))}
-                </select>
-                <div
-                  className="absolute right-3 pointer-events-none"
-                  style={{ color: Colors.textMuted }}
-                >
-                  <ChevronDown size={15} />
-                </div>
-              </InputBox>
-            </div>
-          </div>
-
-          {/* Type + Warranty */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1.5">
-              <FieldLabel>Type / Variant</FieldLabel>
-              <InputBox focused={focused === "type"} icon={Smartphone}>
-                <input
-                  className={inputClass}
-                  style={inputStyle}
-                  value={form.type}
-                  onChange={(e) => set("type", e.target.value)}
-                  onFocus={() => setFocused("type")}
-                  onBlur={() => setFocused("")}
-                />
-              </InputBox>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <FieldLabel>Warranty</FieldLabel>
-              <InputBox focused={focused === "warranty"} icon={Shield}>
-                <select
-                  className="w-full bg-transparent pl-10 pr-8 py-3 text-sm outline-none appearance-none cursor-pointer"
-                  style={{ color: Colors.textPrimary }}
-                  value={form.warranty}
-                  onChange={(e) => set("warranty", e.target.value)}
-                  onFocus={() => setFocused("warranty")}
-                  onBlur={() => setFocused("")}
-                >
-                  {WARRANTY_OPTIONS.map((w) => (
-                    <option key={w} value={w}>
-                      {w}
-                    </option>
-                  ))}
-                </select>
-                <div
-                  className="absolute right-3 pointer-events-none"
-                  style={{ color: Colors.textMuted }}
-                >
-                  <ChevronDown size={15} />
-                </div>
-              </InputBox>
-            </div>
+          {/* Category */}
+          <div className="flex flex-col gap-1.5">
+            <FieldLabel>Category *</FieldLabel>
+            <InputBox focused={focused === "cat"} icon={Boxes}>
+              <select
+                className="w-full bg-transparent pl-10 pr-8 py-3 text-sm outline-none appearance-none cursor-pointer"
+                style={{ color: Colors.textPrimary }}
+                value={form.category}
+                onChange={(e) => set("category", e.target.value)}
+                onFocus={() => setFocused("cat")}
+                onBlur={() => setFocused("")}
+              >
+                {CATEGORIES.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.icon} {c.name}
+                  </option>
+                ))}
+              </select>
+              <div
+                className="absolute right-3 pointer-events-none"
+                style={{ color: Colors.textMuted }}
+              >
+                <ChevronDown size={15} />
+              </div>
+            </InputBox>
           </div>
 
           {/* Price + Original Price */}
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
-              <FieldLabel>Selling Price (₹)</FieldLabel>
+              <FieldLabel>Selling Price (₹) *</FieldLabel>
               <InputBox focused={focused === "price"} icon={IndianRupee}>
                 <input
                   className={inputClass}
@@ -732,71 +827,11 @@ function EditModal({
             </div>
           </div>
 
-          {/* Color + Material */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1.5">
-              <FieldLabel>Color</FieldLabel>
-              <InputBox focused={focused === "color"} icon={Palette}>
-                <input
-                  className={inputClass}
-                  style={inputStyle}
-                  value={form.color}
-                  onChange={(e) => set("color", e.target.value)}
-                  onFocus={() => setFocused("color")}
-                  onBlur={() => setFocused("")}
-                />
-              </InputBox>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <FieldLabel>Material</FieldLabel>
-              <InputBox focused={focused === "material"} icon={Shield}>
-                <input
-                  className={inputClass}
-                  style={inputStyle}
-                  value={form.material}
-                  onChange={(e) => set("material", e.target.value)}
-                  onFocus={() => setFocused("material")}
-                  onBlur={() => setFocused("")}
-                />
-              </InputBox>
-            </div>
-          </div>
-
-          {/* Dimensions + Weight */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1.5">
-              <FieldLabel>Dimensions</FieldLabel>
-              <InputBox focused={focused === "dimensions"} icon={Package}>
-                <input
-                  className={inputClass}
-                  style={inputStyle}
-                  value={form.dimensions}
-                  onChange={(e) => set("dimensions", e.target.value)}
-                  onFocus={() => setFocused("dimensions")}
-                  onBlur={() => setFocused("")}
-                />
-              </InputBox>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <FieldLabel>Weight</FieldLabel>
-              <InputBox focused={focused === "weight"} icon={Package}>
-                <input
-                  className={inputClass}
-                  style={inputStyle}
-                  value={form.weight}
-                  onChange={(e) => set("weight", e.target.value)}
-                  onFocus={() => setFocused("weight")}
-                  onBlur={() => setFocused("")}
-                />
-              </InputBox>
-            </div>
-          </div>
-
           {/* Stock + Min Order Qty */}
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
-              <FieldLabel>Stock Quantity</FieldLabel>
-              <InputBox focused={focused === "stock"} icon={Package}>
+              <FieldLabel>Stock Quantity *</FieldLabel>
+              <InputBox focused={focused === "stock"} icon={Boxes}>
                 <input
                   className={inputClass}
                   style={inputStyle}
@@ -811,7 +846,7 @@ function EditModal({
             </div>
             <div className="flex flex-col gap-1.5">
               <FieldLabel>Min Order Qty</FieldLabel>
-              <InputBox focused={focused === "minOrderQty"} icon={Package}>
+              <InputBox focused={focused === "minOrderQty"} icon={Boxes}>
                 <input
                   className={inputClass}
                   style={inputStyle}
@@ -854,78 +889,6 @@ function EditModal({
                 onFocus={() => setFocused("desc")}
                 onBlur={() => setFocused("")}
               />
-            </div>
-          </div>
-
-          {/* Toggles */}
-          <div className="flex flex-col gap-3">
-            <div
-              className="flex items-center justify-between px-4 py-3 rounded-2xl"
-              style={{
-                background: Colors.surfaceAlt,
-                border: `1.5px solid ${Colors.border}`,
-              }}
-            >
-              <div className="flex items-center gap-2">
-                <TrendingUp size={18} color={Colors.primary} />
-                <div>
-                  <p
-                    className="text-sm font-semibold"
-                    style={{ color: Colors.textPrimary }}
-                  >
-                    Fast Moving
-                  </p>
-                  <p className="text-xs" style={{ color: Colors.textMuted }}>
-                    Highlight as frequently purchased
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => set("isFastMoving", !form.isFastMoving)}
-                style={{
-                  color: form.isFastMoving ? Colors.primary : Colors.textMuted,
-                }}
-              >
-                {form.isFastMoving ? (
-                  <ToggleRight size={34} strokeWidth={1.5} />
-                ) : (
-                  <ToggleLeft size={34} strokeWidth={1.5} />
-                )}
-              </button>
-            </div>
-            <div
-              className="flex items-center justify-between px-4 py-3 rounded-2xl"
-              style={{
-                background: Colors.surfaceAlt,
-                border: `1.5px solid ${Colors.border}`,
-              }}
-            >
-              <div className="flex items-center gap-2">
-                <Star size={18} color={Colors.warning} />
-                <div>
-                  <p
-                    className="text-sm font-semibold"
-                    style={{ color: Colors.textPrimary }}
-                  >
-                    Featured
-                  </p>
-                  <p className="text-xs" style={{ color: Colors.textMuted }}>
-                    Show on homepage
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => set("isFeatured", !form.isFeatured)}
-                style={{
-                  color: form.isFeatured ? Colors.primary : Colors.textMuted,
-                }}
-              >
-                {form.isFeatured ? (
-                  <ToggleRight size={34} strokeWidth={1.5} />
-                ) : (
-                  <ToggleLeft size={34} strokeWidth={1.5} />
-                )}
-              </button>
             </div>
           </div>
 
@@ -995,7 +958,6 @@ export default function ViewProducts() {
   const [products, setProducts] = useState<ApiProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
-
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
@@ -1011,13 +973,11 @@ export default function ViewProducts() {
   const [editProduct, setEditProduct] = useState<ApiProduct | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ApiProduct | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [pendingOps, setPendingOps] = useState<Set<string>>(new Set());
-
+  const [pendingOps] = useState<Set<string>>(new Set());
   const [toast, setToast] = useState<{
     type: "success" | "error";
     message: string;
   } | null>(null);
-
   const [stats, setStats] = useState({
     total: 0,
     inStock: 0,
@@ -1035,13 +995,13 @@ export default function ViewProducts() {
     setTimeout(() => setToast(null), 3000);
   };
 
-  const markPending = (id: string) => setPendingOps((s) => new Set(s).add(id));
-  const clearPending = (id: string) =>
-    setPendingOps((s) => {
-      const n = new Set(s);
-      n.delete(id);
-      return n;
-    });
+  // const markPending = (id: string) => setPendingOps((s) => new Set(s).add(id));
+  // const clearPending = (id: string) =>
+  //   setPendingOps((s) => {
+  //     const n = new Set(s);
+  //     n.delete(id);
+  //     return n;
+  //   });
 
   useEffect(() => {
     if (searchTimer.current) clearTimeout(searchTimer.current);
@@ -1097,62 +1057,11 @@ export default function ViewProducts() {
   useEffect(() => {
     fetchProducts(1);
   }, [fetchProducts]);
-
   useEffect(() => {
     StockAPI.getStats()
       .then((r) => setStats(r.data))
       .catch(() => null);
   }, [products]);
-
-  const handleFastMovingToggle = async (id: string) => {
-    const product = products.find((p) => p._id === id);
-    if (!product || pendingOps.has(id)) return;
-    const next = !product.isFastMoving;
-
-    setProducts((prev) =>
-      prev.map((p) => (p._id === id ? { ...p, isFastMoving: next } : p)),
-    );
-    markPending(id);
-    try {
-      await StockAPI.toggleFastMoving(id, next);
-      showToast(
-        "success",
-        `"${product.name}" ${next ? "marked as" : "removed from"} fast moving`,
-      );
-    } catch (e) {
-      setProducts((prev) =>
-        prev.map((p) => (p._id === id ? { ...p, isFastMoving: !next } : p)),
-      );
-      showToast("error", e instanceof Error ? e.message : "Toggle failed.");
-    } finally {
-      clearPending(id);
-    }
-  };
-
-  const handleFeaturedToggle = async (id: string) => {
-    const product = products.find((p) => p._id === id);
-    if (!product || pendingOps.has(id)) return;
-    const next = !product.isFeatured;
-
-    setProducts((prev) =>
-      prev.map((p) => (p._id === id ? { ...p, isFeatured: next } : p)),
-    );
-    markPending(id);
-    try {
-      await StockAPI.toggleFeatured(id, next);
-      showToast(
-        "success",
-        `"${product.name}" ${next ? "marked as" : "removed from"} featured`,
-      );
-    } catch (e) {
-      setProducts((prev) =>
-        prev.map((p) => (p._id === id ? { ...p, isFeatured: !next } : p)),
-      );
-      showToast("error", e instanceof Error ? e.message : "Toggle failed.");
-    } finally {
-      clearPending(id);
-    }
-  };
 
   const handleSaveEdit = async (updated: ApiProduct) => {
     setProducts((prev) =>
@@ -1257,8 +1166,7 @@ export default function ViewProducts() {
                   color: view === "grid" ? Colors.white : Colors.textMuted,
                 }}
               >
-                <LayoutGrid size={15} strokeWidth={2} />
-                Grid
+                <LayoutGrid size={15} strokeWidth={2} /> Grid
               </button>
               <button
                 onClick={() => setView("table")}
@@ -1271,8 +1179,7 @@ export default function ViewProducts() {
                   color: view === "table" ? Colors.white : Colors.textMuted,
                 }}
               >
-                <LayoutList size={15} strokeWidth={2} />
-                Table
+                <LayoutList size={15} strokeWidth={2} /> Table
               </button>
             </div>
           </div>
@@ -1287,20 +1194,6 @@ export default function ViewProducts() {
               color: Colors.primary,
               bg: Colors.primaryLight,
               icon: Package,
-            },
-            {
-              label: "Fast Moving",
-              value: stats.fastMoving,
-              color: Colors.info,
-              bg: `${Colors.info}18`,
-              icon: TrendingUp,
-            },
-            {
-              label: "Featured",
-              value: stats.featured,
-              color: Colors.warning,
-              bg: `${Colors.warning}18`,
-              icon: Star,
             },
             {
               label: "Low Stock",
@@ -1351,7 +1244,7 @@ export default function ViewProducts() {
         <div className="flex flex-wrap gap-3 items-center">
           <div className="relative flex-1 min-w-52">
             <div
-              className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none transition-colors duration-200"
+              className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"
               style={{
                 color: searchFocused ? Colors.primary : Colors.textMuted,
               }}
@@ -1375,7 +1268,6 @@ export default function ViewProducts() {
               }}
             />
           </div>
-
           <div className="relative">
             <Filter
               size={15}
@@ -1407,7 +1299,6 @@ export default function ViewProducts() {
               className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none"
             />
           </div>
-
           <div className="relative">
             <Package
               size={15}
@@ -1426,13 +1317,7 @@ export default function ViewProducts() {
                 minWidth: 150,
               }}
             >
-              {[
-                "All",
-                "In Stock",
-                "Out of Stock",
-                "Low Stock",
-                "Fast Moving",
-              ].map((s) => (
+              {["All", "In Stock", "Out of Stock", "Low Stock"].map((s) => (
                 <option key={s}>{s}</option>
               ))}
             </select>
@@ -1444,7 +1329,6 @@ export default function ViewProducts() {
           </div>
         </div>
 
-        {/* Results count */}
         {(search || categoryFilter !== "all" || stockFilter !== "All") && (
           <p className="text-xs" style={{ color: Colors.textMuted }}>
             Showing{" "}
@@ -1458,7 +1342,6 @@ export default function ViewProducts() {
           </p>
         )}
 
-        {/* Error State */}
         {fetchError && (
           <div
             className="flex items-center gap-3 px-5 py-4 rounded-2xl"
@@ -1548,16 +1431,6 @@ export default function ViewProducts() {
                         >
                           {stock.label}
                         </div>
-                        {product.isFastMoving && (
-                          <div className="absolute bottom-3 left-3 z-10">
-                            <Flame
-                              size={18}
-                              fill={Colors.info}
-                              strokeWidth={1.5}
-                            />
-                          </div>
-                        )}
-                        {/* Image count indicator */}
                         {product.images && product.images.length > 1 && (
                           <div
                             className="absolute bottom-3 right-3 z-10 px-2 py-0.5 rounded-lg text-xs font-semibold"
@@ -1570,43 +1443,18 @@ export default function ViewProducts() {
                           </div>
                         )}
                       </div>
-
                       {/* Content */}
                       <div className="p-4 flex flex-col gap-2 flex-1">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span
-                            className="text-xs font-medium px-2 py-0.5 rounded-lg"
-                            style={{
-                              background: Colors.primaryLight,
-                              color: Colors.primary,
-                            }}
-                          >
-                            {CATEGORIES.find((c) => c.id === product.category)
-                              ?.name || product.category}
-                          </span>
-                          {product.type && (
-                            <span
-                              className="text-xs px-2 py-0.5 rounded-lg"
-                              style={{
-                                background: Colors.surfaceAlt,
-                                color: Colors.textSecondary,
-                              }}
-                            >
-                              {product.type}
-                            </span>
-                          )}
-                          {product.isFeatured && (
-                            <span
-                              className="text-xs px-2 py-0.5 rounded-lg flex items-center gap-0.5"
-                              style={{
-                                background: `${Colors.warning}18`,
-                                color: Colors.warning,
-                              }}
-                            >
-                              <Star size={10} /> Featured
-                            </span>
-                          )}
-                        </div>
+                        <span
+                          className="text-xs font-medium px-2 py-0.5 rounded-lg w-fit"
+                          style={{
+                            background: Colors.primaryLight,
+                            color: Colors.primary,
+                          }}
+                        >
+                          {CATEGORIES.find((c) => c.id === product.category)
+                            ?.name || product.category}
+                        </span>
                         <div>
                           <p
                             className="text-sm font-bold leading-snug"
@@ -1623,57 +1471,13 @@ export default function ViewProducts() {
                             </p>
                           )}
                         </div>
-                        {/* Specifications preview */}
-                        {product.specifications &&
-                          Object.keys(product.specifications).length > 0 && (
-                            <div className="flex flex-wrap gap-1">
-                              {Object.entries(product.specifications)
-                                .slice(0, 2)
-                                .map(([key, val]) => (
-                                  <span
-                                    key={key}
-                                    className="text-xs px-1.5 py-0.5 rounded-md"
-                                    style={{
-                                      background: Colors.surfaceAlt,
-                                      color: Colors.textSecondary,
-                                    }}
-                                  >
-                                    {key}: {val}
-                                  </span>
-                                ))}
-                              {Object.keys(product.specifications).length >
-                                2 && (
-                                <span
-                                  className="text-xs px-1.5 py-0.5 rounded-md"
-                                  style={{
-                                    background: Colors.surfaceAlt,
-                                    color: Colors.textMuted,
-                                  }}
-                                >
-                                  +
-                                  {Object.keys(product.specifications).length -
-                                    2}
-                                </span>
-                              )}
-                            </div>
-                          )}
-                        {product.tags && product.tags.length > 0 && (
-                          <div className="flex flex-wrap gap-1">
-                            {product.tags.slice(0, 2).map((tagId) => (
-                              <TagBadge key={tagId} tagId={tagId} />
-                            ))}
-                            {product.tags.length > 2 && (
-                              <span
-                                className="text-xs px-2 py-0.5 rounded-lg"
-                                style={{
-                                  background: Colors.surfaceAlt,
-                                  color: Colors.textMuted,
-                                }}
-                              >
-                                +{product.tags.length - 2}
-                              </span>
-                            )}
-                          </div>
+                        {product.description && (
+                          <p
+                            className="text-xs line-clamp-2 leading-relaxed"
+                            style={{ color: Colors.textMuted }}
+                          >
+                            {product.description}
+                          </p>
                         )}
                         <div className="flex items-baseline gap-2 mt-auto pt-1">
                           <p
@@ -1691,18 +1495,8 @@ export default function ViewProducts() {
                                 ₹{product.originalPrice}
                               </p>
                             )}
-                          {product.warranty &&
-                            product.warranty !== "No Warranty" && (
-                              <p
-                                className="text-xs ml-auto"
-                                style={{ color: Colors.textMuted }}
-                              >
-                                {product.warranty}
-                              </p>
-                            )}
                         </div>
                       </div>
-
                       {/* Actions */}
                       <div
                         className="px-4 pb-4 flex items-center gap-2 flex-wrap"
@@ -1711,40 +1505,6 @@ export default function ViewProducts() {
                           paddingTop: 12,
                         }}
                       >
-                        <button
-                          onClick={() => handleFastMovingToggle(product._id)}
-                          disabled={isPending}
-                          className="flex items-center gap-1.5 px-2.5 py-2 rounded-xl text-xs font-semibold transition-all duration-150"
-                          style={{
-                            background: product.isFastMoving
-                              ? `${Colors.info}18`
-                              : Colors.surfaceAlt,
-                            color: product.isFastMoving
-                              ? Colors.info
-                              : Colors.textSecondary,
-                            border: `1px solid ${product.isFastMoving ? Colors.info + "40" : Colors.border}`,
-                            cursor: isPending ? "not-allowed" : "pointer",
-                          }}
-                        >
-                          <Flame size={14} /> FM
-                        </button>
-                        <button
-                          onClick={() => handleFeaturedToggle(product._id)}
-                          disabled={isPending}
-                          className="flex items-center gap-1.5 px-2.5 py-2 rounded-xl text-xs font-semibold transition-all duration-150"
-                          style={{
-                            background: product.isFeatured
-                              ? `${Colors.warning}18`
-                              : Colors.surfaceAlt,
-                            color: product.isFeatured
-                              ? Colors.warning
-                              : Colors.textSecondary,
-                            border: `1px solid ${product.isFeatured ? Colors.warning + "40" : Colors.border}`,
-                            cursor: isPending ? "not-allowed" : "pointer",
-                          }}
-                        >
-                          <Star size={14} />
-                        </button>
                         <button
                           onClick={() => setEditProduct(product)}
                           className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all duration-150"
@@ -1803,7 +1563,7 @@ export default function ViewProducts() {
             }}
           >
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[1200px]">
+              <table className="w-full min-w-[900px]">
                 <thead>
                   <tr style={{ background: Colors.surfaceAlt }}>
                     {[
@@ -1811,13 +1571,8 @@ export default function ViewProducts() {
                       "Product",
                       "Brand",
                       "Category",
-                      "Type",
-                      "Specs",
                       "Price",
                       "Stock",
-                      "Tags",
-                      "Fast Moving",
-                      "Featured",
                       "Actions",
                     ].map((h) => (
                       <th
@@ -1837,7 +1592,7 @@ export default function ViewProducts() {
                     ))
                   ) : products.length === 0 ? (
                     <tr>
-                      <td colSpan={12} className="py-16 text-center">
+                      <td colSpan={7} className="py-16 text-center">
                         <EmptyState inline />
                       </td>
                     </tr>
@@ -1879,22 +1634,12 @@ export default function ViewProducts() {
                                 name={product.name}
                                 size={40}
                               />
-                              <div>
-                                <p
-                                  className="text-sm font-semibold"
-                                  style={{ color: Colors.textPrimary }}
-                                >
-                                  {product.name}
-                                </p>
-                                {product.color && (
-                                  <p
-                                    className="text-xs"
-                                    style={{ color: Colors.textMuted }}
-                                  >
-                                    {product.color}
-                                  </p>
-                                )}
-                              </div>
+                              <p
+                                className="text-sm font-semibold"
+                                style={{ color: Colors.textPrimary }}
+                              >
+                                {product.name}
+                              </p>
                             </div>
                           </td>
                           <td className="px-5 py-3.5">
@@ -1916,34 +1661,6 @@ export default function ViewProducts() {
                               {CATEGORIES.find((c) => c.id === product.category)
                                 ?.name || product.category}
                             </span>
-                          </td>
-                          <td className="px-5 py-3.5">
-                            <p
-                              className="text-sm"
-                              style={{ color: Colors.textSecondary }}
-                            >
-                              {product.type || "—"}
-                            </p>
-                          </td>
-                          <td className="px-5 py-3.5">
-                            {product.specifications &&
-                            Object.keys(product.specifications).length > 0 ? (
-                              <div className="flex flex-col gap-0.5">
-                                {Object.entries(product.specifications)
-                                  .slice(0, 2)
-                                  .map(([key, val]) => (
-                                    <span
-                                      key={key}
-                                      className="text-xs"
-                                      style={{ color: Colors.textSecondary }}
-                                    >
-                                      {key}: {val}
-                                    </span>
-                                  ))}
-                              </div>
-                            ) : (
-                              "—"
-                            )}
                           </td>
                           <td className="px-5 py-3.5">
                             <p
@@ -1972,51 +1689,6 @@ export default function ViewProducts() {
                             >
                               {stock.label}
                             </span>
-                          </td>
-                          <td className="px-5 py-3.5">
-                            <div className="flex flex-wrap gap-1 max-w-[150px]">
-                              {product.tags?.slice(0, 2).map((tagId) => (
-                                <TagBadge key={tagId} tagId={tagId} />
-                              ))}
-                            </div>
-                          </td>
-                          <td className="px-5 py-3.5">
-                            <button
-                              onClick={() =>
-                                handleFastMovingToggle(product._id)
-                              }
-                              disabled={isPending}
-                              style={{
-                                color: product.isFastMoving
-                                  ? Colors.info
-                                  : Colors.textMuted,
-                                cursor: isPending ? "not-allowed" : "pointer",
-                              }}
-                            >
-                              {product.isFastMoving ? (
-                                <ToggleRight size={30} strokeWidth={1.5} />
-                              ) : (
-                                <ToggleLeft size={30} strokeWidth={1.5} />
-                              )}
-                            </button>
-                          </td>
-                          <td className="px-5 py-3.5">
-                            <button
-                              onClick={() => handleFeaturedToggle(product._id)}
-                              disabled={isPending}
-                              style={{
-                                color: product.isFeatured
-                                  ? Colors.warning
-                                  : Colors.textMuted,
-                                cursor: isPending ? "not-allowed" : "pointer",
-                              }}
-                            >
-                              {product.isFeatured ? (
-                                <ToggleRight size={30} strokeWidth={1.5} />
-                              ) : (
-                                <ToggleLeft size={30} strokeWidth={1.5} />
-                              )}
-                            </button>
                           </td>
                           <td className="px-5 py-3.5">
                             <div className="flex items-center gap-2">
@@ -2067,8 +1739,6 @@ export default function ViewProducts() {
                 </tbody>
               </table>
             </div>
-
-            {/* Pagination */}
             {!loading && products.length > 0 && (
               <div
                 className="px-6 py-4 flex items-center justify-between flex-wrap gap-3"
@@ -2142,7 +1812,6 @@ export default function ViewProducts() {
           </div>
         )}
 
-        {/* Grid pagination */}
         {view === "grid" && !loading && totalPages > 1 && (
           <div className="flex items-center justify-center gap-2 pt-2">
             <button
@@ -2200,7 +1869,6 @@ export default function ViewProducts() {
 
       <style>{`
         @keyframes slideUp { from { transform: translateY(16px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-        .line-clamp-1 { display:-webkit-box; -webkit-line-clamp:1; -webkit-box-orient:vertical; overflow:hidden; }
         .line-clamp-2 { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
         input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
         input::placeholder { color: ${Colors.textMuted}; }

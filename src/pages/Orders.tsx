@@ -4,30 +4,26 @@ import {
   Eye,
   CheckCircle2,
   XCircle,
-  Truck,
   Package,
-  Clock,
   Phone,
   MapPin,
   MessageCircle,
-  Pencil,
   X,
   AlertTriangle,
   TrendingUp,
   ShoppingBag,
   Loader2,
   RefreshCw,
-  Smartphone,
   Shield,
   Cable,
   Palette,
+  ClipboardList,
 } from "lucide-react";
 import Colors from "../constants/colors";
 
 // ─── API Base URL ────────────────────────────────────────────────────────────
 const API_BASE = "https://customer-7bcb.onrender.com";
 // const API_BASE = "http://localhost:5000";
-
 // ─── Types matching backend ──────────────────────────────────────────────────
 interface OrderItemImage {
   url: string;
@@ -91,12 +87,11 @@ interface Order {
   updatedAt: string;
 }
 
-// ─── Status Config ───────────────────────────────────────────────────────────
+// ─── SIMPLIFIED Status Config ────────────────────────────────────────────────
 const STATUS_CONFIG: Record<
   string,
   { label: string; color: string; bg: string; icon: React.ElementType }
 > = {
-  pending: { label: "Pending", color: "#FF9800", bg: "#FFF8E1", icon: Clock },
   confirmed: {
     label: "Confirmed",
     color: "#2196F3",
@@ -104,22 +99,16 @@ const STATUS_CONFIG: Record<
     icon: CheckCircle2,
   },
   processing: {
-    label: "Processing",
+    label: "Processed",
     color: "#8B5CF6",
     bg: "#F5F3FF",
-    icon: Pencil,
+    icon: Package,
   },
-  out_for_delivery: {
-    label: "Out for Delivery",
-    color: "#00A884",
-    bg: "#E8F5E9",
-    icon: Truck,
-  },
-  delivered: {
-    label: "Delivered",
+  completed: {
+    label: "Completed",
     color: "#4CAF50",
     bg: "#E8F5E9",
-    icon: Package,
+    icon: CheckCircle2,
   },
   cancelled: {
     label: "Cancelled",
@@ -196,8 +185,6 @@ function timeAgo(dateStr: string): string {
   return `${Math.floor(diff / 86400)}d ago`;
 }
 
-// ─── Updated Helpers ─────────────────────────────────────────────────────────
-
 function getCustomerName(order: Order): string {
   if (order.customer?.profile?.contactName) {
     return order.customer.profile.contactName;
@@ -205,7 +192,6 @@ function getCustomerName(order: Order): string {
   if (order.customer?.phone) {
     return `+91 ${order.customer.phone}`;
   }
-  // Check if customer is populated as object or just an ID
   if (typeof order.customer === "object" && order.customer.phone) {
     return `+91 ${order.customer.phone}`;
   }
@@ -213,16 +199,13 @@ function getCustomerName(order: Order): string {
 }
 
 function getCustomerPhone(order: Order): string {
-  if (order.customer?.phone) {
-    return order.customer.phone;
-  }
+  if (order.customer?.phone) return order.customer.phone;
   return "";
 }
 
 function getCustomerAddress(order: Order): string {
   const p = order.customer?.profile;
   if (!p) return "No address provided";
-
   const parts = [
     p.addressLine1,
     p.addressLine2,
@@ -230,7 +213,6 @@ function getCustomerAddress(order: Order): string {
     p.state,
     p.pincode,
   ].filter(Boolean);
-
   return parts.length > 0 ? parts.join(", ") : "No address provided";
 }
 
@@ -262,13 +244,11 @@ function buildWhatsAppMessage(order: Order): string {
       ]
         .filter(Boolean)
         .join(" · ");
-
       const itemName = details ? `${item.name} (${details})` : item.name;
       const originalPrice =
         item.originalPrice && item.originalPrice > item.sellingPrice
           ? ` (MRP: ₹${item.originalPrice})`
           : "";
-
       return `${idx + 1}. ${itemName}\n   ₹${item.sellingPrice} × ${item.quantity} = ₹${item.lineTotal}${originalPrice}`;
     }),
     ``,
@@ -282,12 +262,9 @@ function buildWhatsAppMessage(order: Order): string {
     ``,
     `💵 *Total Amount: ₹${order.totalAmount?.toLocaleString("en-IN") || 0}*`,
     ``,
-    `📝 *Note:* ${order.note || "N/A"}`,
-    ``,
     `_Thank you for shopping with us! 🙏_`,
   ].filter(Boolean);
 
-  // Encode the full message for WhatsApp URL
   return encodeURIComponent(lines.join("\n"));
 }
 
@@ -326,7 +303,7 @@ function Toast({
 
 // ─── Badges ──────────────────────────────────────────────────────────────────
 function StatusBadge({ status }: { status: string }) {
-  const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.pending;
+  const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.confirmed;
   const Icon = cfg.icon;
   return (
     <span
@@ -363,16 +340,11 @@ function OrderDrawer({
 }) {
   const [localStatus, setLocalStatus] = useState(order.status);
   const [saving, setSaving] = useState(false);
-  const [noteVal] = useState(order.note || "");
 
   const handleStatusChange = async (newStatus: string) => {
     setSaving(true);
     try {
-      const updated = await updateOrderStatus(
-        order._id,
-        newStatus,
-        noteVal || undefined,
-      );
+      const updated = await updateOrderStatus(order._id, newStatus);
       setLocalStatus(newStatus);
       onUpdate({ ...order, ...updated, status: newStatus });
     } catch (err: any) {
@@ -382,11 +354,14 @@ function OrderDrawer({
     }
   };
 
+  // ✅ FIXED: Correct status flow
+  // Confirmed → Processing or Cancelled
+  // Processing → Completed or Cancelled
+  // Completed → No further changes
+  // Cancelled → No further changes
   const nextStatuses: Record<string, string[]> = {
-    pending: ["confirmed", "cancelled"],
     confirmed: ["processing", "cancelled"],
-    processing: ["out_for_delivery", "cancelled"],
-    out_for_delivery: ["delivered", "cancelled"],
+    processing: ["completed", "cancelled"],
   };
 
   const nextActions = nextStatuses[localStatus] || [];
@@ -517,7 +492,6 @@ function OrderDrawer({
                     >
                       {item.name}
                     </p>
-                    {/* Product Details */}
                     <div className="flex flex-wrap items-center gap-1.5 mt-1">
                       {item.brand && (
                         <span
@@ -535,7 +509,7 @@ function OrderDrawer({
                             color: Colors.textSecondary,
                           }}
                         >
-                          <Cable size={10} strokeWidth={2} />
+                          <Cable size={10} />
                           {item.type}
                         </span>
                       )}
@@ -547,7 +521,7 @@ function OrderDrawer({
                             color: Colors.textSecondary,
                           }}
                         >
-                          <Palette size={10} strokeWidth={2} />
+                          <Palette size={10} />
                           {item.color}
                         </span>
                       )}
@@ -559,12 +533,11 @@ function OrderDrawer({
                             color: Colors.success,
                           }}
                         >
-                          <Shield size={10} strokeWidth={2} />
+                          <Shield size={10} />
                           {item.warranty}
                         </span>
                       )}
                     </div>
-                    {/* Price info */}
                     <p
                       className="text-xs mt-1"
                       style={{ color: Colors.textMuted }}
@@ -601,7 +574,7 @@ function OrderDrawer({
             </div>
           </div>
 
-          {/* Status Actions */}
+          {/* Status Actions - FIXED FLOW */}
           <div
             className="px-6 py-5"
             style={{ borderBottom: `1px solid ${Colors.divider}` }}
@@ -641,9 +614,14 @@ function OrderDrawer({
                 })}
               </div>
             )}
+            {nextActions.length === 0 && localStatus !== "confirmed" && (
+              <p className="text-xs" style={{ color: Colors.textMuted }}>
+                No further actions available for{" "}
+                {STATUS_CONFIG[localStatus]?.label || localStatus} orders.
+              </p>
+            )}
           </div>
 
-          {/* WhatsApp */}
           {/* WhatsApp */}
           <div className="px-6 py-5">
             <p
@@ -661,28 +639,9 @@ function OrderDrawer({
                 background: "#25D366",
                 boxShadow: "0 4px 14px rgba(37,211,102,0.3)",
               }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLElement).style.background = "#1ebe57";
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLElement).style.background = "#25D366";
-              }}
-              onClick={(e) => {
-                // Prevent default if message is empty
-                if (!waMsg || waMsg === "") {
-                  e.preventDefault();
-                  alert("No order data available to share.");
-                }
-              }}
             >
               <MessageCircle size={18} /> Share Order via WhatsApp
             </a>
-            <p
-              className="text-xs mt-2 text-center"
-              style={{ color: Colors.textMuted }}
-            >
-              Opens WhatsApp with order details pre-filled
-            </p>
           </div>
         </div>
       </div>
@@ -707,16 +666,13 @@ export default function Orders() {
     message: string;
   } | null>(null);
 
-  // ── Fetch orders from API ─────────────────────────────────────────────────
   const loadOrders = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       const data = await fetchAllOrders({ limit: 100 });
       setOrders(data.orders || []);
-      console.log(`📦 Loaded ${data.orders?.length || 0} electronics orders`);
     } catch (err: any) {
-      console.error("Failed to load orders:", err);
       setError(err.message || "Failed to load orders");
     } finally {
       setLoading(false);
@@ -726,8 +682,6 @@ export default function Orders() {
   useEffect(() => {
     loadOrders();
   }, [loadOrders]);
-
-  // Auto-refresh every 30 seconds
   useEffect(() => {
     const interval = setInterval(loadOrders, 30000);
     return () => clearInterval(interval);
@@ -746,7 +700,6 @@ export default function Orders() {
     showToast("success", `${updatedOrder.orderNumber} updated!`);
   };
 
-  // ── Filter orders ─────────────────────────────────────────────────────────
   const filtered = useMemo(() => {
     return orders
       .filter((o) => {
@@ -771,14 +724,12 @@ export default function Orders() {
       );
   }, [orders, search, statusFilter, payFilter]);
 
-  // Stats
   const stats = useMemo(
     () => ({
       total: orders.length,
-      pending: orders.filter((o) => o.status === "pending").length,
-      outForDelivery: orders.filter((o) => o.status === "out_for_delivery")
-        .length,
-      delivered: orders.filter((o) => o.status === "delivered").length,
+      confirmed: orders.filter((o) => o.status === "confirmed").length,
+      completed: orders.filter((o) => o.status === "completed").length,
+      cancelled: orders.filter((o) => o.status === "cancelled").length,
       revenue: orders
         .filter((o) => o.paymentStatus === "paid")
         .reduce((s, o) => s + o.totalAmount, 0),
@@ -788,15 +739,12 @@ export default function Orders() {
 
   const allStatuses = [
     "All",
-    "pending",
     "confirmed",
     "processing",
-    "out_for_delivery",
-    "delivered",
+    "completed",
     "cancelled",
   ];
 
-  // ── Loading State ─────────────────────────────────────────────────────────
   if (loading && orders.length === 0) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -808,7 +756,6 @@ export default function Orders() {
     );
   }
 
-  // ── Error State ───────────────────────────────────────────────────────────
   if (error && orders.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-4">
@@ -848,7 +795,7 @@ export default function Orders() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Smartphone size={20} color={Colors.primary} />
+            <ClipboardList size={20} color={Colors.primary} />
             <div>
               <h1
                 className="text-xl font-bold"
@@ -857,7 +804,7 @@ export default function Orders() {
                 Orders
               </h1>
               <p className="text-xs" style={{ color: Colors.textMuted }}>
-                Manage electronics accessories orders
+                Manage orders
               </p>
             </div>
           </div>
@@ -872,7 +819,7 @@ export default function Orders() {
           </button>
         </div>
 
-        {/* Stats */}
+        {/* Stats - SIMPLIFIED */}
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
           {[
             {
@@ -883,25 +830,25 @@ export default function Orders() {
               icon: ShoppingBag,
             },
             {
-              label: "Pending",
-              value: stats.pending,
-              color: "#FF9800",
-              bg: "#FFF8E1",
-              icon: Clock,
+              label: "Confirmed",
+              value: stats.confirmed,
+              color: "#2196F3",
+              bg: "#E3F7FD",
+              icon: CheckCircle2,
             },
             {
-              label: "Out for Delivery",
-              value: stats.outForDelivery,
-              color: "#00A884",
-              bg: "#E8F5E9",
-              icon: Truck,
-            },
-            {
-              label: "Delivered",
-              value: stats.delivered,
+              label: "Completed",
+              value: stats.completed,
               color: "#4CAF50",
               bg: "#E8F5E9",
               icon: Package,
+            },
+            {
+              label: "Cancelled",
+              value: stats.cancelled,
+              color: "#E53935",
+              bg: "#FFF0F3",
+              icon: XCircle,
             },
             {
               label: "Revenue (Paid)",
@@ -1066,7 +1013,7 @@ export default function Orders() {
                 {filtered.length === 0 ? (
                   <tr>
                     <td colSpan={8} className="py-16 text-center">
-                      <Smartphone size={36} color={Colors.border} />
+                      <ClipboardList size={36} color={Colors.border} />
                       <p
                         className="text-sm mt-2"
                         style={{ color: Colors.textMuted }}
@@ -1125,15 +1072,6 @@ export default function Orders() {
                           {order.items.length} item
                           {order.items.length > 1 ? "s" : ""}
                         </p>
-                        {/* Show first item type */}
-                        {order.items[0]?.type && (
-                          <p
-                            className="text-xs"
-                            style={{ color: Colors.textMuted }}
-                          >
-                            {order.items[0].type}
-                          </p>
-                        )}
                       </td>
                       <td className="px-5 py-4">
                         <p

@@ -14,16 +14,9 @@ import {
   TrendingUp,
   RefreshCw,
   Download,
-  Pencil,
   Check,
-  History,
   PackageX,
-  Star,
-  Flame,
   Smartphone,
-  Shield,
-  Palette,
-  Cable,
 } from "lucide-react";
 import Colors from "../constants/colors";
 import { CATEGORIES } from "../constants/products";
@@ -32,17 +25,6 @@ import { StockAPI, type ApiProduct } from "../config/api";
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface StockProduct extends ApiProduct {
   minStockAlert: number;
-}
-
-interface StockLog {
-  id: string;
-  productId: string;
-  productName: string;
-  action: "add" | "reduce" | "set" | "toggle_fast" | "toggle_featured";
-  delta: number;
-  prevQty: number;
-  newQty: number;
-  timestamp: Date;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -66,13 +48,6 @@ function getStockStatus(p: StockProduct): {
       bg: `${Colors.warning}18`,
       level: "low",
     };
-  if (p.isFastMoving)
-    return {
-      label: "Fast Moving",
-      color: Colors.info,
-      bg: `${Colors.info}18`,
-      level: "ok",
-    };
   return {
     label: "In Stock",
     color: Colors.success,
@@ -81,15 +56,7 @@ function getStockStatus(p: StockProduct): {
   };
 }
 
-function timeAgo(date: Date): string {
-  const diff = Math.floor((Date.now() - date.getTime()) / 1000);
-  if (diff < 60) return "just now";
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  return `${Math.floor(diff / 86400)}d ago`;
-}
-
-// ── Sub-components ────────────────────────────────────────────────────────────
+// ── Toast ─────────────────────────────────────────────────────────────────────
 function Toast({
   type,
   message,
@@ -122,6 +89,7 @@ function Toast({
   );
 }
 
+// ── Product Thumb ─────────────────────────────────────────────────────────────
 function ProductThumb({
   images,
   name,
@@ -132,7 +100,6 @@ function ProductThumb({
   const [err, setErr] = useState(false);
   const primaryImage =
     images?.find((img) => img.isPrimary)?.url || images?.[0]?.url;
-
   if (!primaryImage || err)
     return (
       <div
@@ -199,7 +166,6 @@ function QtyCell({
         >
           <Minus size={14} strokeWidth={2.5} />
         </button>
-
         {editMode ? (
           <div className="flex items-center gap-1 px-1">
             <input
@@ -240,7 +206,6 @@ function QtyCell({
             {product.stockQuantity}
           </button>
         )}
-
         <button
           onClick={() => {
             const step = parseInt(stepVal) || 1;
@@ -259,7 +224,6 @@ function QtyCell({
           <Plus size={14} strokeWidth={2.5} />
         </button>
       </div>
-
       <div className="relative">
         <select
           value={stepVal}
@@ -283,7 +247,6 @@ function QtyCell({
           style={{ color: Colors.textMuted }}
         />
       </div>
-
       <span className="text-xs" style={{ color: Colors.textMuted }}>
         min {product.minOrderQuantity}
       </span>
@@ -291,11 +254,10 @@ function QtyCell({
   );
 }
 
-// ── Skeleton row ──────────────────────────────────────────────────────────────
 function SkeletonRow() {
   return (
     <tr style={{ borderTop: `1px solid ${Colors.divider}` }}>
-      {Array.from({ length: 12 }).map((_, i) => (
+      {Array.from({ length: 7 }).map((_, i) => (
         <td key={i} className="px-4 py-4">
           <div
             className="h-4 rounded-lg animate-pulse"
@@ -314,29 +276,21 @@ export default function ManageStocks() {
   const [products, setProducts] = useState<StockProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
-
-  // Pagination
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const LIMIT = 20;
 
-  const [logs, setLogs] = useState<StockLog[]>([]);
   const [search, setSearch] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [stockFilter, setStockFilter] = useState("All");
-  const [brandFilter] = useState("");
-  const [showLog, setShowLog] = useState(false);
   const [toast, setToast] = useState<{
     type: "success" | "error";
     message: string;
   } | null>(null);
-  const [alertThresholdId, setAlertThresholdId] = useState<string | null>(null);
-  const [alertInput, setAlertInput] = useState("");
   const [pendingOps, setPendingOps] = useState<Set<string>>(new Set());
 
-  // Debounce search
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [debouncedSearch, setDebouncedSearch] = useState("");
 
@@ -344,7 +298,6 @@ export default function ManageStocks() {
     setToast({ type, message });
     setTimeout(() => setToast(null), 3200);
   };
-
   const markPending = (id: string) => setPendingOps((s) => new Set(s).add(id));
   const clearPending = (id: string) =>
     setPendingOps((s) => {
@@ -364,14 +317,11 @@ export default function ManageStocks() {
           limit: String(LIMIT),
         };
         if (categoryFilter !== "all") params.category = categoryFilter;
-        if (brandFilter) params.brand = brandFilter;
         if (debouncedSearch) params.search = debouncedSearch;
-        if (stockFilter === "Fast Moving") params.fastMoving = "true";
 
         const res = await StockAPI.getList(params);
         const { products: raw, pagination } = res.data;
 
-        // Merge server products with any local alert thresholds we've set
         setProducts((prev) => {
           const alertMap: Record<string, number> = {};
           prev.forEach((p) => {
@@ -379,7 +329,7 @@ export default function ManageStocks() {
           });
           return raw.map((p) => ({
             ...p,
-            minStockAlert: alertMap[p._id] ?? (p.isFastMoving ? 20 : 10),
+            minStockAlert: alertMap[p._id] ?? 10,
           }));
         });
 
@@ -394,15 +344,13 @@ export default function ManageStocks() {
         setLoading(false);
       }
     },
-    [categoryFilter, brandFilter, debouncedSearch, stockFilter],
+    [categoryFilter, debouncedSearch],
   );
 
-  // Initial load + filter changes
   useEffect(() => {
     fetchProducts(1);
   }, [fetchProducts]);
 
-  // Debounce search input
   useEffect(() => {
     if (searchTimer.current) clearTimeout(searchTimer.current);
     searchTimer.current = setTimeout(() => setDebouncedSearch(search), 420);
@@ -411,14 +359,12 @@ export default function ManageStocks() {
     };
   }, [search]);
 
-  // ── Fetch stats ───────────────────────────────────────────────────────────
+  // ── Stats ─────────────────────────────────────────────────────────────────
   const [stats, setStats] = useState({
     total: 0,
     inStock: 0,
     outOfStock: 0,
     lowStock: 0,
-    fastMoving: 0,
-    featured: 0,
   });
 
   useEffect(() => {
@@ -427,28 +373,7 @@ export default function ManageStocks() {
       .catch(() => null);
   }, [products]);
 
-  // ── Push log entry ────────────────────────────────────────────────────────
-  const pushLog = (
-    productId: string,
-    productName: string,
-    action: StockLog["action"],
-    prevQty: number,
-    newQty: number,
-  ) => {
-    const entry: StockLog = {
-      id: Date.now().toString() + Math.random(),
-      productId,
-      productName,
-      action,
-      delta: newQty - prevQty,
-      prevQty,
-      newQty,
-      timestamp: new Date(),
-    };
-    setLogs((l) => [entry, ...l.slice(0, 49)]);
-  };
-
-  // ── Update stock quantity ─────────────────────────────────────────────────
+  // ── Update stock ──────────────────────────────────────────────────────────
   const handleUpdate = async (
     id: string,
     action: "add" | "reduce" | "set",
@@ -465,29 +390,22 @@ export default function ManageStocks() {
           ? Math.max(0, prevQty - val)
           : Math.max(0, val);
 
-    // Optimistic update
     setProducts((prev) =>
       prev.map((p) => (p._id === id ? { ...p, stockQuantity: newQty } : p)),
     );
-    pushLog(id, product.name, action, prevQty, newQty);
-
     markPending(id);
     try {
       const mode =
         action === "set" ? "set" : action === "add" ? "increment" : "decrement";
       await StockAPI.adjustQuantity(id, mode, val);
-
       if (action === "reduce" && newQty === 0)
         showToast("error", `"${product.name}" is now out of stock!`);
-      else if (newQty <= product.minStockAlert && newQty > 0)
-        showToast("error", `"${product.name}" stock is low (${newQty} units)`);
       else if (newQty !== prevQty)
         showToast(
           "success",
           `"${product.name}" updated: ${prevQty} → ${newQty}`,
         );
     } catch (e) {
-      // Revert on failure
       setProducts((prev) =>
         prev.map((p) => (p._id === id ? { ...p, stockQuantity: prevQty } : p)),
       );
@@ -497,95 +415,7 @@ export default function ManageStocks() {
     }
   };
 
-  // ── Toggle Fast Moving ────────────────────────────────────────────────────
-  const handleToggleFastMoving = async (id: string) => {
-    const product = products.find((p) => p._id === id);
-    if (!product || pendingOps.has(id)) return;
-    const next = !product.isFastMoving;
-
-    setProducts((prev) =>
-      prev.map((p) => (p._id === id ? { ...p, isFastMoving: next } : p)),
-    );
-    pushLog(
-      id,
-      product.name,
-      "toggle_fast",
-      product.stockQuantity,
-      product.stockQuantity,
-    );
-
-    markPending(id);
-    try {
-      await StockAPI.toggleFastMoving(id, next);
-      showToast(
-        "success",
-        `"${product.name}" ${next ? "marked as" : "removed from"} Fast Moving`,
-      );
-    } catch (e) {
-      setProducts((prev) =>
-        prev.map((p) => (p._id === id ? { ...p, isFastMoving: !next } : p)),
-      );
-      showToast("error", e instanceof Error ? e.message : "Toggle failed.");
-    } finally {
-      clearPending(id);
-    }
-  };
-
-  // ── Toggle Featured ───────────────────────────────────────────────────────
-  const handleToggleFeatured = async (id: string) => {
-    const product = products.find((p) => p._id === id);
-    if (!product || pendingOps.has(id)) return;
-    const next = !product.isFeatured;
-
-    setProducts((prev) =>
-      prev.map((p) => (p._id === id ? { ...p, isFeatured: next } : p)),
-    );
-    pushLog(
-      id,
-      product.name,
-      "toggle_featured",
-      product.stockQuantity,
-      product.stockQuantity,
-    );
-
-    markPending(id);
-    try {
-      await StockAPI.toggleFeatured(id, next);
-      showToast(
-        "success",
-        `"${product.name}" ${next ? "marked as" : "removed from"} Featured`,
-      );
-    } catch (e) {
-      setProducts((prev) =>
-        prev.map((p) => (p._id === id ? { ...p, isFeatured: !next } : p)),
-      );
-      showToast("error", e instanceof Error ? e.message : "Toggle failed.");
-    } finally {
-      clearPending(id);
-    }
-  };
-
-  // ── Set alert threshold ───────────────────────────────────────────────────
-  const handleSetAlert = async (id: string) => {
-    const n = parseInt(alertInput);
-    if (isNaN(n) || n < 0) {
-      showToast("error", "Enter a valid threshold.");
-      return;
-    }
-    setProducts((prev) =>
-      prev.map((p) => (p._id === id ? { ...p, minStockAlert: n } : p)),
-    );
-    try {
-      await StockAPI.setAlert(id, n);
-    } catch {
-      /* non-critical */
-    }
-    showToast("success", "Alert threshold updated!");
-    setAlertThresholdId(null);
-    setAlertInput("");
-  };
-
-  // ── Bulk restock OOS ──────────────────────────────────────────────────────
+  // ── Bulk restock ──────────────────────────────────────────────────────────
   const handleBulkRestock = async () => {
     try {
       const res = await StockAPI.restockAllOOS(10);
@@ -599,10 +429,10 @@ export default function ManageStocks() {
   // ── Export CSV ────────────────────────────────────────────────────────────
   const handleExport = () => {
     StockAPI.exportCSV();
-    showToast("success", "Electronics stock report download started!");
+    showToast("success", "Stock report download started!");
   };
 
-  // ── Client-side filtering ─────────────────────────────────────────────────
+  // ── Filter ────────────────────────────────────────────────────────────────
   const filtered = useMemo(() => {
     if (stockFilter === "Out of Stock")
       return products.filter((p) => p.stockQuantity === 0);
@@ -626,10 +456,10 @@ export default function ManageStocks() {
       )}
 
       <div className="flex flex-col gap-6 pb-6">
-        {/* ── Page Header ── */}
+        {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
           <div className="flex items-center gap-2">
-            <Smartphone size={20} color={Colors.primary} strokeWidth={2} />
+            <Boxes size={20} color={Colors.primary} strokeWidth={2} />
             <div>
               <h1
                 className="text-xl font-bold"
@@ -638,23 +468,11 @@ export default function ManageStocks() {
                 Manage Stocks
               </h1>
               <p className="text-xs" style={{ color: Colors.textMuted }}>
-                Electronics accessories inventory management
+                Inventory management
               </p>
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            <button
-              onClick={() => setShowLog((v) => !v)}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all duration-150"
-              style={{
-                background: showLog ? Colors.primaryLight : Colors.surface,
-                color: showLog ? Colors.primary : Colors.textSecondary,
-                border: `1.5px solid ${showLog ? Colors.borderFocus : Colors.border}`,
-              }}
-            >
-              <History size={16} strokeWidth={2} />
-              Activity Log {logs.length > 0 && `(${logs.length})`}
-            </button>
             <button
               onClick={handleBulkRestock}
               className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-semibold"
@@ -663,19 +481,8 @@ export default function ManageStocks() {
                 color: Colors.warning,
                 border: `1.5px solid ${Colors.warning}40`,
               }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLElement).style.background =
-                  Colors.warning;
-                (e.currentTarget as HTMLElement).style.color = Colors.white;
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLElement).style.background =
-                  `${Colors.warning}18`;
-                (e.currentTarget as HTMLElement).style.color = Colors.warning;
-              }}
             >
-              <RefreshCw size={16} strokeWidth={2} />
-              Restock All OOS
+              <RefreshCw size={16} strokeWidth={2} /> Restock All OOS
             </button>
             <button
               onClick={handleExport}
@@ -686,14 +493,13 @@ export default function ManageStocks() {
                 boxShadow: `0 4px 12px rgba(0,168,132,0.3)`,
               }}
             >
-              <Download size={16} strokeWidth={2} />
-              Export CSV
+              <Download size={16} strokeWidth={2} /> Export CSV
             </button>
           </div>
         </div>
 
-        {/* ── Stats Row ── */}
-        <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
+        {/* Stats */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
             {
               label: "Total",
@@ -722,20 +528,6 @@ export default function ManageStocks() {
               color: Colors.error,
               bg: "#FFF0F3",
               icon: PackageX,
-            },
-            {
-              label: "Fast Moving",
-              value: stats.fastMoving,
-              color: Colors.info,
-              bg: `${Colors.info}18`,
-              icon: Flame,
-            },
-            {
-              label: "Featured",
-              value: stats.featured,
-              color: Colors.warning,
-              bg: `${Colors.warning}18`,
-              icon: Star,
             },
           ].map(({ label, value, color, bg, icon: Icon }) => (
             <div
@@ -768,7 +560,7 @@ export default function ManageStocks() {
           ))}
         </div>
 
-        {/* ── Alert Banner ── */}
+        {/* Alert Banner */}
         {(stats.lowStock > 0 || stats.outOfStock > 0) && (
           <div
             className="flex items-center gap-3 px-5 py-4 rounded-2xl"
@@ -807,7 +599,7 @@ export default function ManageStocks() {
           </div>
         )}
 
-        {/* ── Filters ── */}
+        {/* Filters */}
         <div className="flex flex-wrap gap-3 items-center">
           <div className="relative flex-1 min-w-48">
             <div
@@ -820,7 +612,7 @@ export default function ManageStocks() {
             </div>
             <input
               type="text"
-              placeholder="Search accessories, brand, type…"
+              placeholder="Search accessories…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               onFocus={() => setSearchFocused(true)}
@@ -884,13 +676,7 @@ export default function ManageStocks() {
                 minWidth: 160,
               }}
             >
-              {[
-                "All",
-                "In Stock",
-                "Low Stock",
-                "Out of Stock",
-                "Fast Moving",
-              ].map((s) => (
+              {["All", "In Stock", "Low Stock", "Out of Stock"].map((s) => (
                 <option key={s}>{s}</option>
               ))}
             </select>
@@ -902,7 +688,7 @@ export default function ManageStocks() {
           </div>
         </div>
 
-        {/* ── Error State ── */}
+        {/* Error */}
         {fetchError && (
           <div
             className="flex items-center gap-3 px-5 py-4 rounded-2xl"
@@ -922,9 +708,7 @@ export default function ManageStocks() {
           </div>
         )}
 
-        {/* ════════════════════════════════════════
-            MAIN TABLE
-        ════════════════════════════════════════ */}
+        {/* Table */}
         <div
           className="rounded-3xl overflow-hidden"
           style={{
@@ -943,28 +727,23 @@ export default function ManageStocks() {
             >
               {loading
                 ? "Loading…"
-                : `${filtered.length} of ${totalCount} electronics products`}
+                : `${filtered.length} of ${totalCount} products`}
             </p>
             <p className="text-xs" style={{ color: Colors.textMuted }}>
-              Click qty to type exact value · Min order qty used as default step
+              Click qty number to type exact value
             </p>
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1400px]">
+            <table className="w-full min-w-[800px]">
               <thead>
                 <tr style={{ background: Colors.surfaceAlt }}>
                   {[
                     "#",
                     "Product",
-                    "Type",
                     "Category",
                     "Status",
                     "Qty / Adjust",
-                    "Step",
-                    "Fast Moving",
-                    "Featured",
-                    "Alert At",
                     "",
                   ].map((h) => (
                     <th
@@ -984,7 +763,7 @@ export default function ManageStocks() {
                   ))
                 ) : filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={11} className="py-16 text-center">
+                    <td colSpan={6} className="py-16 text-center">
                       <div className="flex flex-col items-center gap-2">
                         <Smartphone
                           size={36}
@@ -1022,7 +801,6 @@ export default function ManageStocks() {
                         }
                         className="transition-colors duration-150"
                       >
-                        {/* # */}
                         <td className="px-4 py-4">
                           <span
                             className="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold"
@@ -1034,8 +812,6 @@ export default function ManageStocks() {
                             {(page - 1) * LIMIT + idx + 1}
                           </span>
                         </td>
-
-                        {/* Product */}
                         <td className="px-4 py-4">
                           <div className="flex items-center gap-3">
                             <ProductThumb
@@ -1049,67 +825,17 @@ export default function ManageStocks() {
                               >
                                 {product.name}
                               </p>
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                {product.brand && (
-                                  <span
-                                    className="text-xs font-medium"
-                                    style={{ color: Colors.primary }}
-                                  >
-                                    {product.brand}
-                                  </span>
-                                )}
-                                {product.color && (
-                                  <span
-                                    className="text-xs flex items-center gap-1"
-                                    style={{ color: Colors.textMuted }}
-                                  >
-                                    <Palette size={10} strokeWidth={2} />{" "}
-                                    {product.color}
-                                  </span>
-                                )}
-                                {product.warranty &&
-                                  product.warranty !== "No Warranty" && (
-                                    <span
-                                      className="text-xs flex items-center gap-1"
-                                      style={{ color: Colors.textMuted }}
-                                    >
-                                      <Shield size={10} strokeWidth={2} />{" "}
-                                      {product.warranty}
-                                    </span>
-                                  )}
-                              </div>
+                              {product.brand && (
+                                <p
+                                  className="text-xs font-medium"
+                                  style={{ color: Colors.primary }}
+                                >
+                                  {product.brand}
+                                </p>
+                              )}
                             </div>
                           </div>
                         </td>
-
-                        {/* Type */}
-                        <td className="px-4 py-4">
-                          {product.type ? (
-                            <span
-                              className="text-xs font-medium px-2 py-0.5 rounded-lg whitespace-nowrap"
-                              style={{
-                                background: Colors.surfaceAlt,
-                                color: Colors.textSecondary,
-                              }}
-                            >
-                              <Cable
-                                size={10}
-                                className="inline mr-1"
-                                strokeWidth={2}
-                              />
-                              {product.type}
-                            </span>
-                          ) : (
-                            <span
-                              className="text-xs"
-                              style={{ color: Colors.textMuted }}
-                            >
-                              —
-                            </span>
-                          )}
-                        </td>
-
-                        {/* Category */}
                         <td className="px-4 py-4">
                           <span
                             className="text-xs font-medium px-2 py-0.5 rounded-lg whitespace-nowrap"
@@ -1121,17 +847,7 @@ export default function ManageStocks() {
                             {CATEGORIES.find((c) => c.id === product.category)
                               ?.name || product.category}
                           </span>
-                          {product.subCategory && (
-                            <p
-                              className="text-xs mt-1"
-                              style={{ color: Colors.textMuted }}
-                            >
-                              {product.subCategory}
-                            </p>
-                          )}
                         </td>
-
-                        {/* Status */}
                         <td className="px-4 py-4">
                           <span
                             className="text-xs font-semibold px-2.5 py-1 rounded-xl whitespace-nowrap"
@@ -1140,125 +856,14 @@ export default function ManageStocks() {
                             {stock.label}
                           </span>
                         </td>
-
-                        {/* Qty Adjust */}
                         <td className="px-4 py-4">
                           <QtyCell product={product} onUpdate={handleUpdate} />
                         </td>
-
-                        {/* Step column spacer */}
-                        <td className="px-4 py-4" />
-
-                        {/* Fast Moving */}
-                        <td className="px-4 py-4">
-                          <button
-                            onClick={() => handleToggleFastMoving(product._id)}
-                            disabled={isPending}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all duration-150"
-                            style={{
-                              background: product.isFastMoving
-                                ? `${Colors.info}18`
-                                : Colors.surfaceAlt,
-                              color: product.isFastMoving
-                                ? Colors.info
-                                : Colors.textSecondary,
-                              border: `1px solid ${product.isFastMoving ? Colors.info + "40" : Colors.border}`,
-                              cursor: isPending ? "not-allowed" : "pointer",
-                            }}
-                          >
-                            <Flame size={14} />
-                            {product.isFastMoving ? "Fast" : "Normal"}
-                          </button>
-                        </td>
-
-                        {/* Featured */}
-                        <td className="px-4 py-4">
-                          <button
-                            onClick={() => handleToggleFeatured(product._id)}
-                            disabled={isPending}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all duration-150"
-                            style={{
-                              background: product.isFeatured
-                                ? `${Colors.warning}18`
-                                : Colors.surfaceAlt,
-                              color: product.isFeatured
-                                ? Colors.warning
-                                : Colors.textSecondary,
-                              border: `1px solid ${product.isFeatured ? Colors.warning + "40" : Colors.border}`,
-                              cursor: isPending ? "not-allowed" : "pointer",
-                            }}
-                          >
-                            <Star size={14} />
-                            {product.isFeatured ? "Featured" : "—"}
-                          </button>
-                        </td>
-
-                        {/* Alert Threshold */}
-                        <td className="px-4 py-4">
-                          {alertThresholdId === product._id ? (
-                            <div className="flex items-center gap-1.5">
-                              <input
-                                type="number"
-                                min="0"
-                                value={alertInput}
-                                onChange={(e) => setAlertInput(e.target.value)}
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter")
-                                    handleSetAlert(product._id);
-                                  if (e.key === "Escape")
-                                    setAlertThresholdId(null);
-                                }}
-                                className="w-16 px-2 py-1.5 rounded-xl text-sm text-center outline-none"
-                                style={{
-                                  border: `1.5px solid ${Colors.borderFocus}`,
-                                  color: Colors.textPrimary,
-                                  background: Colors.primaryLight,
-                                }}
-                                autoFocus
-                              />
-                              <button
-                                onClick={() => handleSetAlert(product._id)}
-                                style={{ color: Colors.success }}
-                              >
-                                <Check size={16} strokeWidth={2.5} />
-                              </button>
-                              <button
-                                onClick={() => setAlertThresholdId(null)}
-                                style={{ color: Colors.textMuted }}
-                              >
-                                <X size={14} strokeWidth={2} />
-                              </button>
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => {
-                                setAlertThresholdId(product._id);
-                                setAlertInput(String(product.minStockAlert));
-                              }}
-                              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold"
-                              style={{
-                                background: `${Colors.warning}18`,
-                                color: Colors.warning,
-                                border: `1px solid ${Colors.warning}30`,
-                              }}
-                            >
-                              <AlertTriangle size={13} strokeWidth={2} />≤{" "}
-                              {product.minStockAlert}
-                              <Pencil size={11} strokeWidth={2} />
-                            </button>
-                          )}
-                        </td>
-
-                        {/* Quick Restock */}
                         <td className="px-4 py-4">
                           {product.stockQuantity === 0 && (
                             <button
                               onClick={() =>
-                                handleUpdate(
-                                  product._id,
-                                  "set",
-                                  product.isFastMoving ? 50 : 30,
-                                )
+                                handleUpdate(product._id, "set", 30)
                               }
                               disabled={isPending}
                               className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all duration-150"
@@ -1294,7 +899,7 @@ export default function ManageStocks() {
             </table>
           </div>
 
-          {/* ── Pagination ── */}
+          {/* Pagination */}
           <div
             className="px-6 py-4 flex items-center justify-between flex-wrap gap-3"
             style={{
@@ -1359,139 +964,6 @@ export default function ManageStocks() {
             </div>
           </div>
         </div>
-
-        {/* ════════════════════════════════════════
-            ACTIVITY LOG
-        ════════════════════════════════════════ */}
-        {showLog && (
-          <div
-            className="rounded-3xl overflow-hidden"
-            style={{
-              background: Colors.surface,
-              border: `1px solid ${Colors.border}`,
-              boxShadow: `0 4px 16px ${Colors.shadow}`,
-            }}
-          >
-            <div
-              className="px-6 py-4 flex items-center justify-between"
-              style={{
-                background: `linear-gradient(135deg, ${Colors.gradientStart}, ${Colors.gradientEnd})`,
-              }}
-            >
-              <div className="flex items-center gap-2">
-                <History size={18} color={Colors.white} strokeWidth={2} />
-                <p
-                  className="text-sm font-bold"
-                  style={{ color: Colors.white }}
-                >
-                  Stock Activity Log
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                {logs.length > 0 && (
-                  <button
-                    onClick={() => setLogs([])}
-                    className="text-xs px-3 py-1.5 rounded-xl font-medium"
-                    style={{
-                      background: "rgba(255,255,255,0.18)",
-                      color: Colors.white,
-                    }}
-                  >
-                    Clear
-                  </button>
-                )}
-                <button
-                  onClick={() => setShowLog(false)}
-                  style={{ color: "rgba(255,255,255,0.7)" }}
-                >
-                  <X size={18} />
-                </button>
-              </div>
-            </div>
-            {logs.length === 0 ? (
-              <div className="flex flex-col items-center justify-center gap-2 py-12">
-                <History size={32} color={Colors.border} strokeWidth={1.5} />
-                <p className="text-sm" style={{ color: Colors.textMuted }}>
-                  No activity yet — start adjusting stocks above
-                </p>
-              </div>
-            ) : (
-              <div
-                className="divide-y"
-                style={{
-                  borderColor: Colors.divider,
-                  maxHeight: 360,
-                  overflowY: "auto",
-                }}
-              >
-                {logs.map((log) => {
-                  const isAdd =
-                    log.action === "add" ||
-                    (log.action === "set" && log.delta > 0);
-                  const isRemove =
-                    log.action === "reduce" ||
-                    (log.action === "set" && log.delta < 0);
-                  return (
-                    <div
-                      key={log.id}
-                      className="flex items-center gap-4 px-6 py-3.5"
-                    >
-                      <div
-                        className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
-                        style={{
-                          background: isAdd
-                            ? `${Colors.success}18`
-                            : isRemove
-                              ? "#FFF0F3"
-                              : `${Colors.info}18`,
-                          color: isAdd
-                            ? Colors.success
-                            : isRemove
-                              ? Colors.error
-                              : Colors.info,
-                        }}
-                      >
-                        {isAdd ? (
-                          <TrendingUp size={16} />
-                        ) : isRemove ? (
-                          <TrendingDown size={16} />
-                        ) : log.action === "toggle_fast" ? (
-                          <Flame size={16} />
-                        ) : (
-                          <Star size={16} />
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p
-                          className="text-sm font-semibold truncate"
-                          style={{ color: Colors.textPrimary }}
-                        >
-                          {log.productName}
-                        </p>
-                        <p
-                          className="text-xs"
-                          style={{ color: Colors.textMuted }}
-                        >
-                          {log.action === "toggle_fast"
-                            ? "Fast Moving toggled"
-                            : log.action === "toggle_featured"
-                              ? "Featured toggled"
-                              : `${log.action === "set" ? "Set to" : log.action === "add" ? "Added" : "Reduced by"} ${Math.abs(log.delta)} · ${log.prevQty} → ${log.newQty}`}
-                        </p>
-                      </div>
-                      <span
-                        className="text-xs"
-                        style={{ color: Colors.textMuted }}
-                      >
-                        {timeAgo(log.timestamp)}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
       </div>
 
       <style>{`
