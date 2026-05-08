@@ -24,13 +24,34 @@ export default function AdminLoginPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
   const [mounted, setMounted] = useState(false);
+  // ── NEW: true while we silently verify an existing token ──
+  const [checkingSession, setCheckingSession] = useState(true);
   const emailRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
     setMounted(true);
-    setTimeout(() => emailRef.current?.focus(), 600);
-  }, []);
+
+    // ── AUTO-LOGIN: verify stored token with the backend ──
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setCheckingSession(false);
+      setTimeout(() => emailRef.current?.focus(), 600);
+      return;
+    }
+
+    AdminAPI.getProfile()
+      .then(() => {
+        // Token still valid → go straight to dashboard
+        navigate("/dashboard", { replace: true });
+      })
+      .catch(() => {
+        // Token expired / invalid → clear it and show login form
+        localStorage.removeItem("token");
+        setCheckingSession(false);
+        setTimeout(() => emailRef.current?.focus(), 600);
+      });
+  }, [navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,23 +68,51 @@ export default function AdminLoginPage() {
 
     setLoading(true);
     try {
-      // FIX: call real backend API instead of comparing against env vars
       const res = await AdminAPI.login(email.trim(), password);
-      // Store JWT so authHeaders() can read it for all protected requests
       localStorage.setItem("token", res.data.token);
       setSuccess(true);
       setTimeout(() => navigate("/dashboard"), 500);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Invalid email or password.");
+      setError(
+        err instanceof Error ? err.message : "Invalid email or password.",
+      );
       setLoading(false);
     }
   };
+
+  // ── Fullscreen spinner while session check is in-flight ──
+  if (checkingSession) {
+    return (
+      <div
+        className="min-h-screen w-full flex flex-col items-center justify-center gap-4"
+        style={{
+          background: `linear-gradient(135deg, #0f1724 0%, #0d2137 45%, #0a2e1f 100%)`,
+          fontFamily: "'DM Sans', 'Segoe UI', sans-serif",
+        }}
+      >
+        <Loader2
+          size={36}
+          className="animate-spin"
+          style={{ color: Colors.primary }}
+        />
+        <p
+          className="text-sm font-medium"
+          style={{ color: "rgba(255,255,255,0.45)" }}
+        >
+          Restoring session…
+        </p>
+        <style>{`
+          @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
+        `}</style>
+      </div>
+    );
+  }
 
   return (
     <div
       className="min-h-screen w-full flex items-center justify-center relative overflow-hidden"
       style={{
-        background: Colors.background,
+        background: `linear-gradient(135deg, #0f1724 0%, #0d2137 45%, #0a2e1f 100%)`,
         fontFamily: "'DM Sans', 'Segoe UI', sans-serif",
       }}
     >
@@ -90,7 +139,7 @@ export default function AdminLoginPage() {
         />
       </div>
 
-      {/* ── Card ── */}
+      {/* ── Content ── */}
       <div
         className="relative w-full max-w-md mx-4"
         style={{
@@ -100,16 +149,10 @@ export default function AdminLoginPage() {
             "transform 0.6s cubic-bezier(0.34,1.56,0.64,1), opacity 0.5s ease",
         }}
       >
-        <div
-          className="rounded-3xl overflow-hidden"
-          style={{
-            background: Colors.surface,
-            boxShadow: `0 20px 60px ${Colors.shadowMedium}, 0 4px 16px ${Colors.shadow}`,
-          }}
-        >
+        <div>
           {/* ── Header Strip ── */}
           <div
-            className="px-8 pt-10 pb-8 relative overflow-hidden"
+            className="px-8 pt-10 pb-8 relative overflow-hidden rounded-3xl mb-2"
             style={{
               background: `linear-gradient(135deg, ${Colors.gradientStart} 0%, ${Colors.gradientEnd} 100%)`,
             }}
@@ -155,13 +198,13 @@ export default function AdminLoginPage() {
           </div>
 
           {/* ── Form Body ── */}
-          <div className="px-8 py-8">
+          <div className="px-2 py-8">
             {/* Success Banner */}
             {success && (
               <div
                 className="mb-6 px-4 py-3 rounded-2xl flex items-center gap-3 text-sm font-medium"
                 style={{
-                  background: Colors.primaryLight,
+                  background: "rgba(255,255,255,0.07)",
                   color: Colors.accent,
                   border: `1px solid ${Colors.accentLight}`,
                 }}
@@ -180,13 +223,13 @@ export default function AdminLoginPage() {
               <div
                 className="mb-6 px-4 py-3 rounded-2xl flex items-center gap-3 text-sm font-medium"
                 style={{
-                  background: "#FFF0F3",
-                  color: Colors.error,
-                  border: "1px solid #FFD0DA",
+                  background: "rgba(255, 60, 80, 0.12)",
+                  color: "#ff6b7a",
+                  border: "1px solid rgba(255, 60, 80, 0.25)",
                   animation: "shake 0.35s ease",
                 }}
               >
-                <AlertCircle size={18} color={Colors.error} strokeWidth={2.5} />
+                <AlertCircle size={18} color="#ff6b7a" strokeWidth={2.5} />
                 {error}
               </div>
             )}
@@ -201,7 +244,7 @@ export default function AdminLoginPage() {
                 <label
                   htmlFor="email"
                   className="text-xs font-semibold tracking-wide uppercase"
-                  style={{ color: Colors.textSecondary }}
+                  style={{ color: "rgba(255,255,255,0.45)" }}
                 >
                   Email Address
                 </label>
@@ -209,7 +252,9 @@ export default function AdminLoginPage() {
                   <div
                     className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none transition-colors duration-200"
                     style={{
-                      color: emailFocused ? Colors.primary : Colors.textMuted,
+                      color: emailFocused
+                        ? Colors.primary
+                        : "rgba(255,255,255,0.3)",
                     }}
                   >
                     <Mail size={18} strokeWidth={2} />
@@ -227,10 +272,14 @@ export default function AdminLoginPage() {
                     className="w-full pl-11 pr-4 py-3.5 rounded-2xl text-sm outline-none transition-all duration-200"
                     style={{
                       background: emailFocused
-                        ? Colors.primaryLight
-                        : Colors.surfaceAlt,
-                      border: `1.5px solid ${emailFocused ? Colors.borderFocus : Colors.border}`,
-                      color: Colors.textPrimary,
+                        ? "rgba(255,255,255,0.08)"
+                        : "rgba(255,255,255,0.05)",
+                      border: `1.5px solid ${
+                        emailFocused
+                          ? Colors.borderFocus
+                          : "rgba(255,255,255,0.12)"
+                      }`,
+                      color: Colors.white,
                     }}
                   />
                 </div>
@@ -242,7 +291,7 @@ export default function AdminLoginPage() {
                   <label
                     htmlFor="password"
                     className="text-xs font-semibold tracking-wide uppercase"
-                    style={{ color: Colors.textSecondary }}
+                    style={{ color: "rgba(255,255,255,0.45)" }}
                   >
                     Password
                   </label>
@@ -253,7 +302,7 @@ export default function AdminLoginPage() {
                     style={{
                       color: passwordFocused
                         ? Colors.primary
-                        : Colors.textMuted,
+                        : "rgba(255,255,255,0.3)",
                     }}
                   >
                     <Lock size={18} strokeWidth={2} />
@@ -270,10 +319,14 @@ export default function AdminLoginPage() {
                     className="w-full pl-11 pr-12 py-3.5 rounded-2xl text-sm outline-none transition-all duration-200"
                     style={{
                       background: passwordFocused
-                        ? Colors.primaryLight
-                        : Colors.surfaceAlt,
-                      border: `1.5px solid ${passwordFocused ? Colors.borderFocus : Colors.border}`,
-                      color: Colors.textPrimary,
+                        ? "rgba(255,255,255,0.08)"
+                        : "rgba(255,255,255,0.05)",
+                      border: `1.5px solid ${
+                        passwordFocused
+                          ? Colors.borderFocus
+                          : "rgba(255,255,255,0.12)"
+                      }`,
+                      color: Colors.white,
                     }}
                   />
                   <button
@@ -281,10 +334,14 @@ export default function AdminLoginPage() {
                     onClick={() => setShowPassword((v) => !v)}
                     className="absolute right-4 top-1/2 -translate-y-1/2 transition-colors duration-150"
                     style={{
-                      color: showPassword ? Colors.primary : Colors.textMuted,
+                      color: showPassword
+                        ? Colors.primary
+                        : "rgba(255,255,255,0.3)",
                     }}
                     tabIndex={-1}
-                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    aria-label={
+                      showPassword ? "Hide password" : "Show password"
+                    }
                   >
                     {showPassword ? (
                       <EyeOff size={20} strokeWidth={2} />
@@ -335,7 +392,7 @@ export default function AdminLoginPage() {
             {/* ── Footer Note ── */}
             <p
               className="mt-6 text-center text-xs"
-              style={{ color: Colors.textMuted }}
+              style={{ color: "rgba(255,255,255,0.25)" }}
             >
               Secure admin access only. Unauthorized attempts are logged.
             </p>
@@ -344,7 +401,7 @@ export default function AdminLoginPage() {
 
         <p
           className="text-center text-xs mt-4"
-          style={{ color: Colors.textMuted }}
+          style={{ color: "rgba(255,255,255,0.2)" }}
         >
           Protected by end-to-end encryption
         </p>
@@ -360,7 +417,7 @@ export default function AdminLoginPage() {
           60%       { transform: translateX(-4px); }
           80%       { transform: translateX(4px); }
         }
-        input::placeholder { color: ${Colors.textMuted}; }
+        input::placeholder { color: rgba(255,255,255,0.2); }
       `}</style>
     </div>
   );

@@ -1,14 +1,13 @@
 const BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:5000/api";
 
 // ── Generic fetch wrapper ────────────────────────────────────────────────────
-async function request<T>(
-  path: string,
-  options: RequestInit = {}
-): Promise<T> {
+async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const token = localStorage.getItem("token");
   const res = await fetch(`${BASE_URL}${path}`, {
     ...options,
     headers: {
       "Content-Type": "application/json",
+      ...(token && { Authorization: `Bearer ${token}` }),
       ...options.headers,
     },
   });
@@ -18,16 +17,34 @@ async function request<T>(
 }
 
 // For multipart/form-data (file uploads) — no Content-Type header so browser sets boundary
-async function requestForm<T>(path: string, body: FormData, method = "POST"): Promise<T> {
-  const res = await fetch(`${BASE_URL}${path}`, { method, body });
+async function requestForm<T>(
+  path: string,
+  body: FormData,
+  method = "POST",
+): Promise<T> {
+  const token = localStorage.getItem("token");
+  const res = await fetch(`${BASE_URL}${path}`, {
+    method,
+    body,
+    headers: {
+      ...(token && { Authorization: `Bearer ${token}` }),
+    },
+  });
   const json = await res.json();
   if (!res.ok) throw new Error(json.message ?? "Request failed");
   return json;
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
-// TYPES  (mirror backend responses)
+// TYPES  (for Electronics Accessories)
 // ════════════════════════════════════════════════════════════════════════════════
+
+export interface ProductImage {
+  url: string;
+  publicId: string;
+  isPrimary: boolean;
+  altText?: string;
+}
 
 export interface ApiProduct {
   _id: string;
@@ -35,15 +52,20 @@ export interface ApiProduct {
   brand?: string;
   category: string;
   subCategory?: string;
+  type?: string;
+  compatibility?: string[];
   sellingPrice: number;
   originalPrice?: number;
-  unit: string;
-  weightOrSize?: string;
+  color?: string;
+  material?: string;
+  dimensions?: string;
+  weight?: string;
+  warranty?: string;
   stockQuantity: number;
   minOrderQuantity: number;
   description?: string;
-  imageUrl?: string;
-  imagePublicId?: string;
+  specifications?: Record<string, string>;
+  images: ProductImage[];
   tags: string[];
   isFastMoving: boolean;
   isFeatured: boolean;
@@ -64,7 +86,9 @@ export interface StockStats {
 
 export interface ActivityLogEntry {
   _id: string;
-  productId: string | { _id: string; name: string; imageUrl?: string; category: string };
+  productId:
+    | string
+    | { _id: string; name: string; images?: ProductImage[]; category: string };
   productName: string;
   action: string;
   previousValue?: number | boolean | null;
@@ -80,17 +104,25 @@ export interface Pagination {
   totalPages: number;
 }
 
+export interface BulkUploadResponse {
+  totalRows: number;
+  successCount: number;
+  failedCount: number;
+  insertedProducts: ApiProduct[];
+  failedRows: { row: number; errors: unknown }[];
+}
+
 // ════════════════════════════════════════════════════════════════════════════════
 // PRODUCT API
 // ════════════════════════════════════════════════════════════════════════════════
 
 export const ProductAPI = {
-  /** POST /api/products/single  — multipart/form-data with optional image file */
+  /** POST /api/products/single  — multipart/form-data with multiple images */
   addSingle: (formData: FormData) =>
     requestForm<{ success: boolean; message: string; data: ApiProduct }>(
       "/products/single",
       formData,
-      "POST"
+      "POST",
     ),
 
   /** POST /api/products/bulk  — multipart/form-data with csv/xlsx file */
@@ -98,21 +130,16 @@ export const ProductAPI = {
     requestForm<{
       success: boolean;
       message: string;
-      data: {
-        totalRows: number;
-        successCount: number;
-        failedCount: number;
-        insertedProducts: ApiProduct[];
-        failedRows: { row: number; errors: unknown }[];
-      };
+      data: BulkUploadResponse;
     }>("/products/bulk", formData, "POST"),
 
   /** GET /api/products */
   getAll: (params?: Record<string, string>) => {
     const qs = params ? "?" + new URLSearchParams(params).toString() : "";
-    return request<{ success: boolean; data: { products: ApiProduct[]; pagination: Pagination } }>(
-      `/products${qs}`
-    );
+    return request<{
+      success: boolean;
+      data: { products: ApiProduct[]; pagination: Pagination };
+    }>(`/products${qs}`);
   },
 
   /** GET /api/products/:id */
@@ -124,13 +151,35 @@ export const ProductAPI = {
     requestForm<{ success: boolean; message: string; data: ApiProduct }>(
       `/products/${id}`,
       formData,
-      "PATCH"
+      "PATCH",
+    ),
+
+  /** PATCH /api/products/:id/images  — Replace all images */
+  replaceImages: (id: string, formData: FormData) =>
+    requestForm<{ success: boolean; message: string; data: ApiProduct }>(
+      `/products/${id}/images`,
+      formData,
+      "PATCH",
     ),
 
   /** DELETE /api/products/:id */
   delete: (id: string) =>
     request<{ success: boolean; message: string }>(`/products/${id}`, {
       method: "DELETE",
+    }),
+
+  /** PATCH /api/products/:id/step */
+  updateStep: (id: string, step: number) =>
+    request<{ success: boolean; message: string }>(`/products/${id}/step`, {
+      method: "PATCH",
+      body: JSON.stringify({ step }),
+    }),
+
+  /** PATCH /api/products/:id/status */
+  toggleStatus: (id: string, isActive: boolean) =>
+    request<{ success: boolean; message: string }>(`/products/${id}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ isActive }),
     }),
 };
 
@@ -146,31 +195,36 @@ export const StockAPI = {
   /** GET /api/stocks  */
   getList: (params?: Record<string, string>) => {
     const qs = params ? "?" + new URLSearchParams(params).toString() : "";
-    return request<{ success: boolean; data: { products: ApiProduct[]; pagination: Pagination } }>(
-      `/stocks${qs}`
-    );
+    return request<{
+      success: boolean;
+      data: { products: ApiProduct[]; pagination: Pagination };
+    }>(`/stocks${qs}`);
   },
 
   /** PATCH /api/stocks/:id/quantity */
   adjustQuantity: (
     id: string,
     mode: "increment" | "decrement" | "set",
-    value: number
+    value: number,
   ) =>
-    request<{ success: boolean; message: string; data: { newQuantity: number } }>(
-      `/stocks/${id}/quantity`,
-      {
-        method: "PATCH",
-        body: JSON.stringify({ mode, value }),
-      }
-    ),
+    request<{
+      success: boolean;
+      message: string;
+      data: { newQuantity: number };
+    }>(`/stocks/${id}/quantity`, {
+      method: "PATCH",
+      body: JSON.stringify({ mode, value }),
+    }),
 
   /** PATCH /api/stocks/:id/fast-moving */
   toggleFastMoving: (id: string, isFastMoving: boolean) =>
-    request<{ success: boolean; message: string }>(`/stocks/${id}/fast-moving`, {
-      method: "PATCH",
-      body: JSON.stringify({ isFastMoving }),
-    }),
+    request<{ success: boolean; message: string }>(
+      `/stocks/${id}/fast-moving`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ isFastMoving }),
+      },
+    ),
 
   /** PATCH /api/stocks/:id/featured */
   toggleFeatured: (id: string, isFeatured: boolean) =>
@@ -186,26 +240,21 @@ export const StockAPI = {
       body: JSON.stringify({ alertAt }),
     }),
 
-  /** PATCH /api/products/:id/step */
-  updateStep: (id: string, step: number) =>
-    request<{ success: boolean; message: string }>(`/products/${id}/step`, {
-      method: "PATCH",
-      body: JSON.stringify({ step }),
-    }),
-
   /** POST /api/stocks/restock-all-oos */
   restockAllOOS: (quantity = 10) =>
-    request<{ success: boolean; message: string; data: { updatedCount: number } }>(
-      "/stocks/restock-all-oos",
-      {
-        method: "POST",
-        body: JSON.stringify({ quantity }),
-      }
-    ),
+    request<{
+      success: boolean;
+      message: string;
+      data: { updatedCount: number };
+    }>("/stocks/restock-all-oos", {
+      method: "POST",
+      body: JSON.stringify({ quantity }),
+    }),
 
   /** GET /api/stocks/export-csv  — triggers browser download */
   exportCSV: () => {
-    window.open(`${BASE_URL}/stocks/export-csv`, "_blank");
+    const token = localStorage.getItem("token");
+    window.open(`${BASE_URL}/stocks/export-csv?token=${token}`, "_blank");
   },
 
   /** GET /api/stocks/activity-log */
@@ -227,42 +276,32 @@ export interface AdminLoginResponse {
   admin: { email: string };
 }
 
-// Attach token to every protected request
-function authHeaders(): Record<string, string> {
-  const token = localStorage.getItem("token") ?? ""; 
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
-
 export const AdminAPI = {
   login: (email: string, password: string) =>
     request<{ success: boolean; message: string; data: AdminLoginResponse }>(
       "/admin/login",
-      { method: "POST", body: JSON.stringify({ email, password }) }
+      { method: "POST", body: JSON.stringify({ email, password }) },
     ),
 
   getProfile: () =>
-    request<{ success: boolean; data: { email: string } }>("/admin/profile", {
-      headers: authHeaders(),
-    }),
+    request<{ success: boolean; data: { email: string } }>("/admin/profile"),
 
   changeEmail: (newEmail: string, password: string) =>
     request<{ success: boolean; message: string; data: AdminLoginResponse }>(
       "/admin/email",
       {
         method: "PATCH",
-        headers: authHeaders(),
         body: JSON.stringify({ newEmail, password }),
-      }
+      },
     ),
 
   changePassword: (
     oldPassword: string,
     newPassword: string,
-    confirmPassword: string
+    confirmPassword: string,
   ) =>
     request<{ success: boolean; message: string }>("/admin/password", {
       method: "PATCH",
-      headers: authHeaders(),
       body: JSON.stringify({ oldPassword, newPassword, confirmPassword }),
     }),
 };

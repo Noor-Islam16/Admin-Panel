@@ -13,20 +13,28 @@ import {
   ChevronDown,
   Tag,
   IndianRupee,
-  Boxes,
   AlignLeft,
   PackagePlus,
   CheckCircle2,
   ImageOff,
   Filter,
   Star,
-  Award,
   TrendingUp,
   Flame,
   RefreshCw,
+  Smartphone,
+  Cpu,
+  Shield,
+  Cable,
+  Monitor,
+  Palette,
 } from "lucide-react";
 import Colors from "../constants/colors";
-import { CATEGORIES } from "../constants/products";
+import {
+  CATEGORIES,
+  PRODUCT_TAGS,
+  WARRANTY_OPTIONS,
+} from "../constants/products";
 import { ProductAPI, StockAPI, type ApiProduct } from "../config/api";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -128,21 +136,23 @@ function Toast({
   );
 }
 
-// ── Product Image ─────────────────────────────────────────────────────────────
+// ── Product Image (Supports multiple images) ──────────────────────────────────
 function ProductImage({
-  src,
+  images,
   name,
   size = 56,
   fill = false,
 }: {
-  src?: string;
+  images?: ApiProduct["images"];
   name: string;
   size?: number;
   fill?: boolean;
 }) {
   const [err, setErr] = useState(false);
+  const primaryImage =
+    images?.find((img) => img.isPrimary)?.url || images?.[0]?.url;
 
-  if (!src || err) {
+  if (!primaryImage || err) {
     return (
       <div
         className="flex items-center justify-center rounded-2xl flex-shrink-0"
@@ -165,7 +175,7 @@ function ProductImage({
   if (fill) {
     return (
       <img
-        src={src}
+        src={primaryImage}
         alt={name}
         onError={() => setErr(true)}
         className="w-full h-full object-cover"
@@ -181,7 +191,7 @@ function ProductImage({
 
   return (
     <img
-      src={src}
+      src={primaryImage}
       alt={name}
       onError={() => setErr(true)}
       className="rounded-2xl object-cover flex-shrink-0"
@@ -191,29 +201,20 @@ function ProductImage({
 }
 
 // ── Tag Badge ─────────────────────────────────────────────────────────────────
-function TagBadge({ tag }: { tag: string }) {
-  const tagColors: Record<string, { bg: string; color: string }> = {
-    "Limited Stock": { bg: `${Colors.warning}18`, color: Colors.warning },
-    "Out of Stock": { bg: "#FFF0F3", color: Colors.error },
-    "Fast Moving": { bg: `${Colors.info}18`, color: Colors.info },
-    "New Arrival": { bg: Colors.primaryLight, color: Colors.primary },
-    "Best Seller": { bg: "#FFF8E1", color: "#F9A825" },
-    "Special Offer": { bg: "#FCE4EC", color: "#E91E63" },
-    Trending: { bg: "#E8EAF6", color: "#5C6BC0" },
-    Premium: { bg: "#FFF3E0", color: "#F57C00" },
-    Organic: { bg: "#E8F5E9", color: "#43A047" },
-    Imported: { bg: "#E3F2FD", color: "#1E88E5" },
-  };
-  const style = tagColors[tag] || {
-    bg: Colors.surfaceAlt,
-    color: Colors.textSecondary,
-  };
+function TagBadge({ tagId }: { tagId: string }) {
+  const tag = PRODUCT_TAGS.find((t) => t.id === tagId);
+  if (!tag) return null;
+
   return (
     <span
       className="text-xs px-2 py-0.5 rounded-lg font-medium whitespace-nowrap"
-      style={{ background: style.bg, color: style.color }}
+      style={{
+        background: tag.color + "18",
+        color: tag.color,
+        border: `1px solid ${tag.color}30`,
+      }}
     >
-      {tag}
+      {tag.name}
     </span>
   );
 }
@@ -344,7 +345,7 @@ function SkeletonCard() {
     >
       <div
         className="animate-pulse"
-        style={{ height: 160, background: Colors.surfaceAlt }}
+        style={{ height: 200, background: Colors.surfaceAlt }}
       />
       <div className="p-4 flex flex-col gap-3">
         <div
@@ -379,7 +380,7 @@ function SkeletonRow() {
   );
 }
 
-// ── Edit Modal ────────────────────────────────────────────────────────────────
+// ── Edit Modal (Updated for Electronics) ──────────────────────────────────────
 function EditModal({
   product,
   onSave,
@@ -394,11 +395,16 @@ function EditModal({
     brand: product.brand ?? "",
     category: product.category,
     subCategory: product.subCategory ?? "",
+    type: product.type ?? "",
+    compatibility: product.compatibility ?? [],
     sellingPrice: String(product.sellingPrice),
     originalPrice:
       product.originalPrice != null ? String(product.originalPrice) : "",
-    unit: product.unit,
-    weightOrSize: product.weightOrSize ?? "",
+    color: product.color ?? "",
+    material: product.material ?? "",
+    dimensions: product.dimensions ?? "",
+    weight: product.weight ?? "",
+    warranty: product.warranty ?? "No Warranty",
     stockQuantity: String(product.stockQuantity),
     minOrderQuantity: String(product.minOrderQuantity),
     description: product.description ?? "",
@@ -407,11 +413,10 @@ function EditModal({
   });
   const [focused, setFocused] = useState("");
   const [saving, setSaving] = useState(false);
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState(product.imageUrl ?? "");
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
   const imageRef = useRef<HTMLInputElement>(null);
 
-  const set = (key: keyof typeof form, val: string | boolean) =>
+  const set = (key: keyof typeof form, val: string | boolean | string[]) =>
     setForm((prev) => ({ ...prev, [key]: val }));
 
   const handleSave = async () => {
@@ -423,22 +428,30 @@ function EditModal({
       fd.append("category", form.category);
       fd.append("sellingPrice", form.sellingPrice);
       fd.append("stockQuantity", form.stockQuantity);
-      fd.append("unit", form.unit);
+      fd.append("warranty", form.warranty);
       fd.append("isFastMoving", String(form.isFastMoving));
       fd.append("isFeatured", String(form.isFeatured));
+
       if (form.brand) fd.append("brand", form.brand);
       if (form.subCategory) fd.append("subCategory", form.subCategory);
+      if (form.type) fd.append("type", form.type);
+      if (form.compatibility.length)
+        fd.append("compatibility", form.compatibility.join(","));
       if (form.originalPrice) fd.append("originalPrice", form.originalPrice);
-      if (form.weightOrSize) fd.append("weightOrSize", form.weightOrSize);
+      if (form.color) fd.append("color", form.color);
+      if (form.material) fd.append("material", form.material);
+      if (form.dimensions) fd.append("dimensions", form.dimensions);
+      if (form.weight) fd.append("weight", form.weight);
       if (form.description) fd.append("description", form.description);
       if (form.minOrderQuantity)
         fd.append("minOrderQuantity", form.minOrderQuantity);
-      if (imageFile) fd.append("image", imageFile);
+
+      // Append new images if any
+      imageFiles.forEach((file) => fd.append("images", file));
 
       const res = await ProductAPI.update(product._id, fd);
       onSave(res.data);
     } catch (e) {
-      // bubble error up via onSave returning nothing — caller handles toast
       throw e;
     } finally {
       setSaving(false);
@@ -448,8 +461,8 @@ function EditModal({
   const inputClass =
     "w-full bg-transparent pl-10 pr-4 py-3 text-sm outline-none";
   const inputStyle = { color: Colors.textPrimary };
-  const categoryOptions = CATEGORIES.filter((c) => c.id !== "all");
-  const UNITS = ["kg", "g", "litre", "ml", "pack", "piece", "dozen", "box"];
+  const availableSubcategories =
+    CATEGORIES.find((c) => c.id === form.category)?.subcategories || [];
 
   return (
     <div
@@ -457,7 +470,7 @@ function EditModal({
       style={{ background: Colors.overlay }}
     >
       <div
-        className="w-full max-w-lg rounded-3xl overflow-hidden"
+        className="w-full max-w-2xl rounded-3xl overflow-hidden"
         style={{
           background: Colors.surface,
           boxShadow: "0 24px 64px rgba(0,0,0,0.22)",
@@ -475,7 +488,7 @@ function EditModal({
           <div className="flex items-center gap-2">
             <Pencil size={18} color={Colors.white} strokeWidth={2} />
             <p className="text-base font-bold" style={{ color: Colors.white }}>
-              Edit Product
+              Edit Electronics Accessory
             </p>
           </div>
           <button
@@ -491,55 +504,64 @@ function EditModal({
         </div>
 
         <div className="p-6 flex flex-col gap-4">
-          {/* Image preview + picker */}
+          {/* Current Images Preview */}
+          {product.images && product.images.length > 0 && (
+            <div className="flex gap-2 overflow-x-auto pb-2">
+              {product.images.map((img, i) => (
+                <div key={i} className="relative flex-shrink-0">
+                  <img
+                    src={img.url}
+                    alt={img.altText || `${product.name} ${i + 1}`}
+                    className="w-16 h-16 rounded-xl object-cover"
+                    style={{
+                      border: img.isPrimary
+                        ? `2px solid ${Colors.primary}`
+                        : `1px solid ${Colors.border}`,
+                    }}
+                  />
+                  {img.isPrimary && (
+                    <span
+                      className="absolute -top-1 -right-1 px-1 py-0.5 rounded text-[9px] font-bold"
+                      style={{
+                        background: Colors.primary,
+                        color: Colors.white,
+                      }}
+                    >
+                      Primary
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Add New Images */}
           <div className="flex items-center gap-4">
-            <div
-              className="w-16 h-16 rounded-2xl overflow-hidden flex-shrink-0"
+            <input
+              ref={imageRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                const files = Array.from(e.target.files || []);
+                setImageFiles((prev) => [...prev, ...files]);
+              }}
+            />
+            <button
+              onClick={() => imageRef.current?.click()}
+              className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold"
               style={{
-                background: Colors.surfaceAlt,
-                border: `1px solid ${Colors.border}`,
+                background: Colors.primaryLight,
+                color: Colors.primary,
+                border: `1px solid ${Colors.accentLight}`,
               }}
             >
-              {imagePreview ? (
-                <img
-                  src={imagePreview}
-                  alt={form.name}
-                  className="w-full h-full object-cover"
-                  onError={() => setImagePreview("")}
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center">
-                  <ImageOff size={24} color={Colors.border} strokeWidth={1.5} />
-                </div>
-              )}
-            </div>
-            <div className="flex-1 flex flex-col gap-1.5">
-              <FieldLabel>Product Image</FieldLabel>
-              <input
-                ref={imageRef}
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                className="hidden"
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (!f) return;
-                  setImageFile(f);
-                  setImagePreview(URL.createObjectURL(f));
-                }}
-              />
-              <button
-                onClick={() => imageRef.current?.click()}
-                className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold"
-                style={{
-                  background: Colors.primaryLight,
-                  color: Colors.primary,
-                  border: `1px solid ${Colors.accentLight}`,
-                }}
-              >
-                <PackagePlus size={14} strokeWidth={2} />
-                {imageFile ? imageFile.name : "Change Image"}
-              </button>
-            </div>
+              <PackagePlus size={14} strokeWidth={2} />
+              {imageFiles.length > 0
+                ? `${imageFiles.length} images selected`
+                : "Add New Images"}
+            </button>
           </div>
 
           {/* Name + Brand */}
@@ -559,7 +581,7 @@ function EditModal({
             </div>
             <div className="flex flex-col gap-1.5">
               <FieldLabel>Brand</FieldLabel>
-              <InputBox focused={focused === "brand"} icon={Award}>
+              <InputBox focused={focused === "brand"} icon={Cpu}>
                 <input
                   className={inputClass}
                   style={inputStyle}
@@ -572,20 +594,23 @@ function EditModal({
             </div>
           </div>
 
-          {/* Category + Unit */}
+          {/* Category + SubCategory */}
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <FieldLabel>Category</FieldLabel>
-              <InputBox focused={focused === "cat"} icon={Boxes}>
+              <InputBox focused={focused === "cat"} icon={Monitor}>
                 <select
                   className="w-full bg-transparent pl-10 pr-8 py-3 text-sm outline-none appearance-none cursor-pointer"
                   style={{ color: Colors.textPrimary }}
                   value={form.category}
-                  onChange={(e) => set("category", e.target.value)}
+                  onChange={(e) => {
+                    set("category", e.target.value);
+                    set("subCategory", "");
+                  }}
                   onFocus={() => setFocused("cat")}
                   onBlur={() => setFocused("")}
                 >
-                  {categoryOptions.map((c) => (
+                  {CATEGORIES.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.icon} {c.name}
                     </option>
@@ -600,19 +625,63 @@ function EditModal({
               </InputBox>
             </div>
             <div className="flex flex-col gap-1.5">
-              <FieldLabel>Unit</FieldLabel>
-              <InputBox focused={focused === "unit"} icon={PackagePlus}>
+              <FieldLabel>Sub Category</FieldLabel>
+              <InputBox focused={focused === "subCat"} icon={Cable}>
                 <select
                   className="w-full bg-transparent pl-10 pr-8 py-3 text-sm outline-none appearance-none cursor-pointer"
                   style={{ color: Colors.textPrimary }}
-                  value={form.unit}
-                  onChange={(e) => set("unit", e.target.value)}
-                  onFocus={() => setFocused("unit")}
+                  value={form.subCategory}
+                  onChange={(e) => set("subCategory", e.target.value)}
+                  onFocus={() => setFocused("subCat")}
+                  onBlur={() => setFocused("")}
+                  disabled={!form.category}
+                >
+                  <option value="">Select sub category</option>
+                  {availableSubcategories.map((sc) => (
+                    <option key={sc} value={sc}>
+                      {sc}
+                    </option>
+                  ))}
+                </select>
+                <div
+                  className="absolute right-3 pointer-events-none"
+                  style={{ color: Colors.textMuted }}
+                >
+                  <ChevronDown size={15} />
+                </div>
+              </InputBox>
+            </div>
+          </div>
+
+          {/* Type + Warranty */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1.5">
+              <FieldLabel>Type / Variant</FieldLabel>
+              <InputBox focused={focused === "type"} icon={Smartphone}>
+                <input
+                  className={inputClass}
+                  style={inputStyle}
+                  value={form.type}
+                  onChange={(e) => set("type", e.target.value)}
+                  onFocus={() => setFocused("type")}
+                  onBlur={() => setFocused("")}
+                />
+              </InputBox>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <FieldLabel>Warranty</FieldLabel>
+              <InputBox focused={focused === "warranty"} icon={Shield}>
+                <select
+                  className="w-full bg-transparent pl-10 pr-8 py-3 text-sm outline-none appearance-none cursor-pointer"
+                  style={{ color: Colors.textPrimary }}
+                  value={form.warranty}
+                  onChange={(e) => set("warranty", e.target.value)}
+                  onFocus={() => setFocused("warranty")}
                   onBlur={() => setFocused("")}
                 >
-                  {UNITS.map((u) => (
-                    <option key={u} value={u}>
-                      {u}
+                  {WARRANTY_OPTIONS.map((w) => (
+                    <option key={w} value={w}>
+                      {w}
                     </option>
                   ))}
                 </select>
@@ -663,11 +732,71 @@ function EditModal({
             </div>
           </div>
 
+          {/* Color + Material */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1.5">
+              <FieldLabel>Color</FieldLabel>
+              <InputBox focused={focused === "color"} icon={Palette}>
+                <input
+                  className={inputClass}
+                  style={inputStyle}
+                  value={form.color}
+                  onChange={(e) => set("color", e.target.value)}
+                  onFocus={() => setFocused("color")}
+                  onBlur={() => setFocused("")}
+                />
+              </InputBox>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <FieldLabel>Material</FieldLabel>
+              <InputBox focused={focused === "material"} icon={Shield}>
+                <input
+                  className={inputClass}
+                  style={inputStyle}
+                  value={form.material}
+                  onChange={(e) => set("material", e.target.value)}
+                  onFocus={() => setFocused("material")}
+                  onBlur={() => setFocused("")}
+                />
+              </InputBox>
+            </div>
+          </div>
+
+          {/* Dimensions + Weight */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1.5">
+              <FieldLabel>Dimensions</FieldLabel>
+              <InputBox focused={focused === "dimensions"} icon={Package}>
+                <input
+                  className={inputClass}
+                  style={inputStyle}
+                  value={form.dimensions}
+                  onChange={(e) => set("dimensions", e.target.value)}
+                  onFocus={() => setFocused("dimensions")}
+                  onBlur={() => setFocused("")}
+                />
+              </InputBox>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <FieldLabel>Weight</FieldLabel>
+              <InputBox focused={focused === "weight"} icon={Package}>
+                <input
+                  className={inputClass}
+                  style={inputStyle}
+                  value={form.weight}
+                  onChange={(e) => set("weight", e.target.value)}
+                  onFocus={() => setFocused("weight")}
+                  onBlur={() => setFocused("")}
+                />
+              </InputBox>
+            </div>
+          </div>
+
           {/* Stock + Min Order Qty */}
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <FieldLabel>Stock Quantity</FieldLabel>
-              <InputBox focused={focused === "stock"} icon={Boxes}>
+              <InputBox focused={focused === "stock"} icon={Package}>
                 <input
                   className={inputClass}
                   style={inputStyle}
@@ -682,7 +811,7 @@ function EditModal({
             </div>
             <div className="flex flex-col gap-1.5">
               <FieldLabel>Min Order Qty</FieldLabel>
-              <InputBox focused={focused === "minOrderQty"} icon={Boxes}>
+              <InputBox focused={focused === "minOrderQty"} icon={Package}>
                 <input
                   className={inputClass}
                   style={inputStyle}
@@ -695,22 +824,6 @@ function EditModal({
                 />
               </InputBox>
             </div>
-          </div>
-
-          {/* Weight */}
-          <div className="flex flex-col gap-1.5">
-            <FieldLabel>Weight / Size</FieldLabel>
-            <InputBox focused={focused === "weight"} icon={Boxes}>
-              <input
-                className={inputClass}
-                style={inputStyle}
-                placeholder="e.g. 5kg, 500ml"
-                value={form.weightOrSize}
-                onChange={(e) => set("weightOrSize", e.target.value)}
-                onFocus={() => setFocused("weight")}
-                onBlur={() => setFocused("")}
-              />
-            </InputBox>
           </div>
 
           {/* Description */}
@@ -864,7 +977,7 @@ function EmptyState({ inline = false }: { inline?: boolean }) {
     <div
       className={`flex flex-col items-center justify-center gap-3 ${inline ? "py-8" : "py-20"}`}
     >
-      <Package size={40} color={Colors.border} strokeWidth={1.5} />
+      <Smartphone size={40} color={Colors.border} strokeWidth={1.5} />
       <p className="text-sm font-semibold" style={{ color: Colors.textMuted }}>
         No products found
       </p>
@@ -883,7 +996,6 @@ export default function ViewProducts() {
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
-  // Pagination
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
@@ -894,6 +1006,7 @@ export default function ViewProducts() {
   const [searchFocused, setSearchFocused] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [stockFilter, setStockFilter] = useState("All");
+  const [brandFilter] = useState("");
 
   const [editProduct, setEditProduct] = useState<ApiProduct | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ApiProduct | null>(null);
@@ -905,7 +1018,6 @@ export default function ViewProducts() {
     message: string;
   } | null>(null);
 
-  // Stats
   const [stats, setStats] = useState({
     total: 0,
     inStock: 0,
@@ -915,7 +1027,6 @@ export default function ViewProducts() {
     featured: 0,
   });
 
-  // Debounce search
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [debouncedSearch, setDebouncedSearch] = useState("");
 
@@ -932,7 +1043,6 @@ export default function ViewProducts() {
       return n;
     });
 
-  // ── Debounce search ───────────────────────────────────────────────────────
   useEffect(() => {
     if (searchTimer.current) clearTimeout(searchTimer.current);
     searchTimer.current = setTimeout(() => setDebouncedSearch(search), 420);
@@ -941,7 +1051,6 @@ export default function ViewProducts() {
     };
   }, [search]);
 
-  // ── Fetch products ────────────────────────────────────────────────────────
   const fetchProducts = useCallback(
     async (pg = 1) => {
       setLoading(true);
@@ -955,11 +1064,11 @@ export default function ViewProducts() {
         if (debouncedSearch) params.search = debouncedSearch;
         if (stockFilter === "Fast Moving") params.fastMoving = "true";
         if (stockFilter === "Featured") params.featured = "true";
+        if (brandFilter) params.brand = brandFilter;
 
         const res = await ProductAPI.getAll(params);
         const { products: raw, pagination } = res.data;
 
-        // Client-side stock filter for In Stock / Out of Stock / Low Stock
         let filtered = raw;
         if (stockFilter === "Out of Stock")
           filtered = raw.filter((p) => p.stockQuantity === 0);
@@ -982,21 +1091,19 @@ export default function ViewProducts() {
         setLoading(false);
       }
     },
-    [categoryFilter, debouncedSearch, stockFilter],
+    [categoryFilter, debouncedSearch, stockFilter, brandFilter],
   );
 
   useEffect(() => {
     fetchProducts(1);
   }, [fetchProducts]);
 
-  // ── Fetch stats ───────────────────────────────────────────────────────────
   useEffect(() => {
     StockAPI.getStats()
       .then((r) => setStats(r.data))
       .catch(() => null);
   }, [products]);
 
-  // ── Toggle Fast Moving ────────────────────────────────────────────────────
   const handleFastMovingToggle = async (id: string) => {
     const product = products.find((p) => p._id === id);
     if (!product || pendingOps.has(id)) return;
@@ -1022,7 +1129,6 @@ export default function ViewProducts() {
     }
   };
 
-  // ── Toggle Featured ───────────────────────────────────────────────────────
   const handleFeaturedToggle = async (id: string) => {
     const product = products.find((p) => p._id === id);
     if (!product || pendingOps.has(id)) return;
@@ -1048,7 +1154,6 @@ export default function ViewProducts() {
     }
   };
 
-  // ── Save edit ─────────────────────────────────────────────────────────────
   const handleSaveEdit = async (updated: ApiProduct) => {
     setProducts((prev) =>
       prev.map((p) => (p._id === updated._id ? updated : p)),
@@ -1057,7 +1162,6 @@ export default function ViewProducts() {
     showToast("success", `"${updated.name}" updated successfully!`);
   };
 
-  // ── Delete ────────────────────────────────────────────────────────────────
   const handleDelete = async () => {
     if (!deleteTarget) return;
     setDeleting(true);
@@ -1074,7 +1178,6 @@ export default function ViewProducts() {
     }
   };
 
-  // ── Compute discount for display ──────────────────────────────────────────
   const getDiscount = (p: ApiProduct) => {
     if (!p.originalPrice || p.originalPrice <= p.sellingPrice) return null;
     return Math.round(
@@ -1108,16 +1211,16 @@ export default function ViewProducts() {
       )}
 
       <div className="flex flex-col gap-6 pb-6">
-        {/* ── Page Header ── */}
+        {/* Page Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div className="flex items-center gap-2">
-            <Package size={20} color={Colors.primary} strokeWidth={2} />
+            <Smartphone size={20} color={Colors.primary} strokeWidth={2} />
             <div>
               <h1
                 className="text-xl font-bold"
                 style={{ color: Colors.textPrimary }}
               >
-                View Products
+                Electronics Accessories
               </h1>
               <p className="text-xs" style={{ color: Colors.textMuted }}>
                 {totalCount} products in catalogue
@@ -1125,7 +1228,6 @@ export default function ViewProducts() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {/* Refresh */}
             <button
               onClick={() => fetchProducts(page)}
               className="p-2.5 rounded-2xl transition-all duration-150"
@@ -1137,7 +1239,6 @@ export default function ViewProducts() {
             >
               <RefreshCw size={16} strokeWidth={2} />
             </button>
-            {/* View Toggle */}
             <div
               className="flex items-center gap-1 p-1 rounded-2xl"
               style={{
@@ -1145,33 +1246,39 @@ export default function ViewProducts() {
                 border: `1px solid ${Colors.border}`,
               }}
             >
-              {(
-                [
-                  ["grid", LayoutGrid],
-                  ["table", LayoutList],
-                ] as const
-              ).map(([v, Icon]) => (
-                <button
-                  key={v}
-                  onClick={() => setView(v)}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold transition-all duration-200"
-                  style={{
-                    background:
-                      view === v
-                        ? `linear-gradient(135deg, ${Colors.gradientStart}, ${Colors.gradientEnd})`
-                        : "transparent",
-                    color: view === v ? Colors.white : Colors.textMuted,
-                  }}
-                >
-                  <Icon size={15} strokeWidth={2} />
-                  {v.charAt(0).toUpperCase() + v.slice(1)}
-                </button>
-              ))}
+              <button
+                onClick={() => setView("grid")}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold transition-all duration-200"
+                style={{
+                  background:
+                    view === "grid"
+                      ? `linear-gradient(135deg, ${Colors.gradientStart}, ${Colors.gradientEnd})`
+                      : "transparent",
+                  color: view === "grid" ? Colors.white : Colors.textMuted,
+                }}
+              >
+                <LayoutGrid size={15} strokeWidth={2} />
+                Grid
+              </button>
+              <button
+                onClick={() => setView("table")}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold transition-all duration-200"
+                style={{
+                  background:
+                    view === "table"
+                      ? `linear-gradient(135deg, ${Colors.gradientStart}, ${Colors.gradientEnd})`
+                      : "transparent",
+                  color: view === "table" ? Colors.white : Colors.textMuted,
+                }}
+              >
+                <LayoutList size={15} strokeWidth={2} />
+                Table
+              </button>
             </div>
           </div>
         </div>
 
-        {/* ── Stats Row ── */}
+        {/* Stats Row */}
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
           {[
             {
@@ -1240,7 +1347,7 @@ export default function ViewProducts() {
           ))}
         </div>
 
-        {/* ── Filters Row ── */}
+        {/* Filters Row */}
         <div className="flex flex-wrap gap-3 items-center">
           <div className="relative flex-1 min-w-52">
             <div
@@ -1253,7 +1360,7 @@ export default function ViewProducts() {
             </div>
             <input
               type="text"
-              placeholder="Search products…"
+              placeholder="Search electronics accessories…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               onFocus={() => setSearchFocused(true)}
@@ -1284,11 +1391,11 @@ export default function ViewProducts() {
                 background: Colors.surface,
                 border: `1.5px solid ${Colors.border}`,
                 color: Colors.textSecondary,
-                minWidth: 160,
+                minWidth: 180,
               }}
             >
               <option value="all">All Categories</option>
-              {CATEGORIES.filter((c) => c.id !== "all").map((c) => (
+              {CATEGORIES.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.icon} {c.name}
                 </option>
@@ -1302,7 +1409,7 @@ export default function ViewProducts() {
           </div>
 
           <div className="relative">
-            <Boxes
+            <Package
               size={15}
               color={Colors.textMuted}
               className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"
@@ -1337,7 +1444,7 @@ export default function ViewProducts() {
           </div>
         </div>
 
-        {/* ── Results count ── */}
+        {/* Results count */}
         {(search || categoryFilter !== "all" || stockFilter !== "All") && (
           <p className="text-xs" style={{ color: Colors.textMuted }}>
             Showing{" "}
@@ -1351,7 +1458,7 @@ export default function ViewProducts() {
           </p>
         )}
 
-        {/* ── Error State ── */}
+        {/* Error State */}
         {fetchError && (
           <div
             className="flex items-center gap-3 px-5 py-4 rounded-2xl"
@@ -1371,9 +1478,7 @@ export default function ViewProducts() {
           </div>
         )}
 
-        {/* ══════════════════════════════
-            GRID VIEW
-        ══════════════════════════════ */}
+        {/* Grid View */}
         {view === "grid" && (
           <>
             {loading ? (
@@ -1399,33 +1504,27 @@ export default function ViewProducts() {
                         border: `1px solid ${Colors.border}`,
                         boxShadow: `0 2px 12px ${Colors.shadow}`,
                         opacity: isPending ? 0.75 : 1,
-                        transition: "opacity 0.2s",
                       }}
                       onMouseEnter={(e) => {
-                        (e.currentTarget as HTMLElement).style.boxShadow =
-                          `0 8px 28px ${Colors.shadowMedium}`;
-                        (e.currentTarget as HTMLElement).style.transform =
-                          "translateY(-2px)";
+                        e.currentTarget.style.boxShadow = `0 8px 28px ${Colors.shadowMedium}`;
+                        e.currentTarget.style.transform = "translateY(-2px)";
                       }}
                       onMouseLeave={(e) => {
-                        (e.currentTarget as HTMLElement).style.boxShadow =
-                          `0 2px 12px ${Colors.shadow}`;
-                        (e.currentTarget as HTMLElement).style.transform =
-                          "translateY(0)";
+                        e.currentTarget.style.boxShadow = `0 2px 12px ${Colors.shadow}`;
+                        e.currentTarget.style.transform = "translateY(0)";
                       }}
                     >
                       {/* Image */}
                       <div
                         className="relative"
                         style={{
-                          height: 160,
-                          width: "100%",
+                          height: 200,
                           background: Colors.surfaceAlt,
                           overflow: "hidden",
                         }}
                       >
                         <ProductImage
-                          src={product.imageUrl}
+                          images={product.images}
                           name={product.name}
                           fill={true}
                         />
@@ -1442,20 +1541,32 @@ export default function ViewProducts() {
                         )}
                         <div
                           className="absolute top-3 right-3 px-2.5 py-1 rounded-xl text-xs font-semibold z-10"
-                          style={{ background: "black", color: "white" }}
+                          style={{
+                            background: "rgba(0,0,0,0.75)",
+                            color: "white",
+                          }}
                         >
                           {stock.label}
                         </div>
                         {product.isFastMoving && (
-                          <div
-                            className="absolute bottom-3 left-3 z-10"
-                            style={{ color: "black" }}
-                          >
+                          <div className="absolute bottom-3 left-3 z-10">
                             <Flame
                               size={18}
                               fill={Colors.info}
                               strokeWidth={1.5}
                             />
+                          </div>
+                        )}
+                        {/* Image count indicator */}
+                        {product.images && product.images.length > 1 && (
+                          <div
+                            className="absolute bottom-3 right-3 z-10 px-2 py-0.5 rounded-lg text-xs font-semibold"
+                            style={{
+                              background: "rgba(0,0,0,0.75)",
+                              color: "white",
+                            }}
+                          >
+                            {product.images.length} images
                           </div>
                         )}
                       </div>
@@ -1473,6 +1584,17 @@ export default function ViewProducts() {
                             {CATEGORIES.find((c) => c.id === product.category)
                               ?.name || product.category}
                           </span>
+                          {product.type && (
+                            <span
+                              className="text-xs px-2 py-0.5 rounded-lg"
+                              style={{
+                                background: Colors.surfaceAlt,
+                                color: Colors.textSecondary,
+                              }}
+                            >
+                              {product.type}
+                            </span>
+                          )}
                           {product.isFeatured && (
                             <span
                               className="text-xs px-2 py-0.5 rounded-lg flex items-center gap-0.5"
@@ -1495,24 +1617,50 @@ export default function ViewProducts() {
                           {product.brand && (
                             <p
                               className="text-xs mt-0.5"
-                              style={{ color: Colors.textMuted }}
+                              style={{ color: Colors.primary }}
                             >
                               {product.brand}
                             </p>
                           )}
                         </div>
-                        {product.description && (
-                          <p
-                            className="text-xs line-clamp-2 leading-relaxed"
-                            style={{ color: Colors.textMuted }}
-                          >
-                            {product.description}
-                          </p>
-                        )}
-                        {product.tags.length > 0 && (
+                        {/* Specifications preview */}
+                        {product.specifications &&
+                          Object.keys(product.specifications).length > 0 && (
+                            <div className="flex flex-wrap gap-1">
+                              {Object.entries(product.specifications)
+                                .slice(0, 2)
+                                .map(([key, val]) => (
+                                  <span
+                                    key={key}
+                                    className="text-xs px-1.5 py-0.5 rounded-md"
+                                    style={{
+                                      background: Colors.surfaceAlt,
+                                      color: Colors.textSecondary,
+                                    }}
+                                  >
+                                    {key}: {val}
+                                  </span>
+                                ))}
+                              {Object.keys(product.specifications).length >
+                                2 && (
+                                <span
+                                  className="text-xs px-1.5 py-0.5 rounded-md"
+                                  style={{
+                                    background: Colors.surfaceAlt,
+                                    color: Colors.textMuted,
+                                  }}
+                                >
+                                  +
+                                  {Object.keys(product.specifications).length -
+                                    2}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        {product.tags && product.tags.length > 0 && (
                           <div className="flex flex-wrap gap-1">
-                            {product.tags.slice(0, 2).map((tag) => (
-                              <TagBadge key={tag} tag={tag} />
+                            {product.tags.slice(0, 2).map((tagId) => (
+                              <TagBadge key={tagId} tagId={tagId} />
                             ))}
                             {product.tags.length > 2 && (
                               <span
@@ -1543,21 +1691,16 @@ export default function ViewProducts() {
                                 ₹{product.originalPrice}
                               </p>
                             )}
-                          <p
-                            className="text-xs ml-auto"
-                            style={{ color: Colors.textMuted }}
-                          >
-                            / {product.unit}
-                          </p>
+                          {product.warranty &&
+                            product.warranty !== "No Warranty" && (
+                              <p
+                                className="text-xs ml-auto"
+                                style={{ color: Colors.textMuted }}
+                              >
+                                {product.warranty}
+                              </p>
+                            )}
                         </div>
-                        {product.weightOrSize && (
-                          <p
-                            className="text-xs"
-                            style={{ color: Colors.textMuted }}
-                          >
-                            {product.weightOrSize}
-                          </p>
-                        )}
                       </div>
 
                       {/* Actions */}
@@ -1611,16 +1754,12 @@ export default function ViewProducts() {
                             border: `1px solid ${Colors.info}40`,
                           }}
                           onMouseEnter={(e) => {
-                            (e.currentTarget as HTMLElement).style.background =
-                              Colors.info;
-                            (e.currentTarget as HTMLElement).style.color =
-                              Colors.white;
+                            e.currentTarget.style.background = Colors.info;
+                            e.currentTarget.style.color = Colors.white;
                           }}
                           onMouseLeave={(e) => {
-                            (e.currentTarget as HTMLElement).style.background =
-                              `${Colors.info}18`;
-                            (e.currentTarget as HTMLElement).style.color =
-                              Colors.info;
+                            e.currentTarget.style.background = `${Colors.info}18`;
+                            e.currentTarget.style.color = Colors.info;
                           }}
                         >
                           <Pencil size={14} strokeWidth={2} /> Edit
@@ -1631,19 +1770,15 @@ export default function ViewProducts() {
                           style={{
                             background: "#FFF0F3",
                             color: Colors.error,
-                            border: `1px solid #FFD0DA`,
+                            border: "1px solid #FFD0DA",
                           }}
                           onMouseEnter={(e) => {
-                            (e.currentTarget as HTMLElement).style.background =
-                              Colors.error;
-                            (e.currentTarget as HTMLElement).style.color =
-                              Colors.white;
+                            e.currentTarget.style.background = Colors.error;
+                            e.currentTarget.style.color = Colors.white;
                           }}
                           onMouseLeave={(e) => {
-                            (e.currentTarget as HTMLElement).style.background =
-                              "#FFF0F3";
-                            (e.currentTarget as HTMLElement).style.color =
-                              Colors.error;
+                            e.currentTarget.style.background = "#FFF0F3";
+                            e.currentTarget.style.color = Colors.error;
                           }}
                         >
                           <Trash2 size={14} strokeWidth={2} />
@@ -1657,9 +1792,7 @@ export default function ViewProducts() {
           </>
         )}
 
-        {/* ══════════════════════════════
-            TABLE VIEW
-        ══════════════════════════════ */}
+        {/* Table View */}
         {view === "table" && (
           <div
             className="rounded-3xl overflow-hidden"
@@ -1670,7 +1803,7 @@ export default function ViewProducts() {
             }}
           >
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[1000px]">
+              <table className="w-full min-w-[1200px]">
                 <thead>
                   <tr style={{ background: Colors.surfaceAlt }}>
                     {[
@@ -1678,6 +1811,8 @@ export default function ViewProducts() {
                       "Product",
                       "Brand",
                       "Category",
+                      "Type",
+                      "Specs",
                       "Price",
                       "Stock",
                       "Tags",
@@ -1702,7 +1837,7 @@ export default function ViewProducts() {
                     ))
                   ) : products.length === 0 ? (
                     <tr>
-                      <td colSpan={10} className="py-16 text-center">
+                      <td colSpan={12} className="py-16 text-center">
                         <EmptyState inline />
                       </td>
                     </tr>
@@ -1716,15 +1851,13 @@ export default function ViewProducts() {
                           style={{
                             borderTop: `1px solid ${Colors.divider}`,
                             opacity: isPending ? 0.7 : 1,
-                            transition: "opacity 0.2s",
                           }}
                           onMouseEnter={(e) =>
-                            ((e.currentTarget as HTMLElement).style.background =
+                            (e.currentTarget.style.background =
                               Colors.primaryLight)
                           }
                           onMouseLeave={(e) =>
-                            ((e.currentTarget as HTMLElement).style.background =
-                              "transparent")
+                            (e.currentTarget.style.background = "transparent")
                           }
                           className="transition-colors duration-150"
                         >
@@ -1742,7 +1875,7 @@ export default function ViewProducts() {
                           <td className="px-5 py-3.5">
                             <div className="flex items-center gap-3">
                               <ProductImage
-                                src={product.imageUrl}
+                                images={product.images}
                                 name={product.name}
                                 size={40}
                               />
@@ -1753,12 +1886,12 @@ export default function ViewProducts() {
                                 >
                                   {product.name}
                                 </p>
-                                {product.description && (
+                                {product.color && (
                                   <p
-                                    className="text-xs line-clamp-1 max-w-[200px]"
+                                    className="text-xs"
                                     style={{ color: Colors.textMuted }}
                                   >
-                                    {product.description}
+                                    {product.color}
                                   </p>
                                 )}
                               </div>
@@ -1783,6 +1916,34 @@ export default function ViewProducts() {
                               {CATEGORIES.find((c) => c.id === product.category)
                                 ?.name || product.category}
                             </span>
+                          </td>
+                          <td className="px-5 py-3.5">
+                            <p
+                              className="text-sm"
+                              style={{ color: Colors.textSecondary }}
+                            >
+                              {product.type || "—"}
+                            </p>
+                          </td>
+                          <td className="px-5 py-3.5">
+                            {product.specifications &&
+                            Object.keys(product.specifications).length > 0 ? (
+                              <div className="flex flex-col gap-0.5">
+                                {Object.entries(product.specifications)
+                                  .slice(0, 2)
+                                  .map(([key, val]) => (
+                                    <span
+                                      key={key}
+                                      className="text-xs"
+                                      style={{ color: Colors.textSecondary }}
+                                    >
+                                      {key}: {val}
+                                    </span>
+                                  ))}
+                              </div>
+                            ) : (
+                              "—"
+                            )}
                           </td>
                           <td className="px-5 py-3.5">
                             <p
@@ -1814,20 +1975,9 @@ export default function ViewProducts() {
                           </td>
                           <td className="px-5 py-3.5">
                             <div className="flex flex-wrap gap-1 max-w-[150px]">
-                              {product.tags.slice(0, 2).map((tag) => (
-                                <TagBadge key={tag} tag={tag} />
+                              {product.tags?.slice(0, 2).map((tagId) => (
+                                <TagBadge key={tagId} tagId={tagId} />
                               ))}
-                              {product.tags.length > 2 && (
-                                <span
-                                  className="text-xs px-2 py-0.5 rounded-lg"
-                                  style={{
-                                    background: Colors.surfaceAlt,
-                                    color: Colors.textMuted,
-                                  }}
-                                >
-                                  +{product.tags.length - 2}
-                                </span>
-                              )}
                             </div>
                           </td>
                           <td className="px-5 py-3.5">
@@ -1878,18 +2028,13 @@ export default function ViewProducts() {
                                   color: Colors.info,
                                 }}
                                 onMouseEnter={(e) => {
-                                  (
-                                    e.currentTarget as HTMLElement
-                                  ).style.background = Colors.info;
-                                  (e.currentTarget as HTMLElement).style.color =
-                                    Colors.white;
+                                  e.currentTarget.style.background =
+                                    Colors.info;
+                                  e.currentTarget.style.color = Colors.white;
                                 }}
                                 onMouseLeave={(e) => {
-                                  (
-                                    e.currentTarget as HTMLElement
-                                  ).style.background = `${Colors.info}18`;
-                                  (e.currentTarget as HTMLElement).style.color =
-                                    Colors.info;
+                                  e.currentTarget.style.background = `${Colors.info}18`;
+                                  e.currentTarget.style.color = Colors.info;
                                 }}
                               >
                                 <Pencil size={13} strokeWidth={2} /> Edit
@@ -1902,18 +2047,13 @@ export default function ViewProducts() {
                                   color: Colors.error,
                                 }}
                                 onMouseEnter={(e) => {
-                                  (
-                                    e.currentTarget as HTMLElement
-                                  ).style.background = Colors.error;
-                                  (e.currentTarget as HTMLElement).style.color =
-                                    Colors.white;
+                                  e.currentTarget.style.background =
+                                    Colors.error;
+                                  e.currentTarget.style.color = Colors.white;
                                 }}
                                 onMouseLeave={(e) => {
-                                  (
-                                    e.currentTarget as HTMLElement
-                                  ).style.background = "#FFF0F3";
-                                  (e.currentTarget as HTMLElement).style.color =
-                                    Colors.error;
+                                  e.currentTarget.style.background = "#FFF0F3";
+                                  e.currentTarget.style.color = Colors.error;
                                 }}
                               >
                                 <Trash2 size={13} strokeWidth={2} /> Delete
@@ -2067,6 +2207,7 @@ export default function ViewProducts() {
         select option { color: ${Colors.textPrimary}; background: ${Colors.surface}; }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
         .animate-pulse { animation: pulse 1.5s ease-in-out infinite; }
+        * { scrollbar-width: thin; scrollbar-color: ${Colors.border} transparent; }
       `}</style>
     </>
   );

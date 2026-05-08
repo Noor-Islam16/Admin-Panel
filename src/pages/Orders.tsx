@@ -1,6 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import {
-  ClipboardList,
   Search,
   Eye,
   CheckCircle2,
@@ -18,6 +17,10 @@ import {
   ShoppingBag,
   Loader2,
   RefreshCw,
+  Smartphone,
+  Shield,
+  Cable,
+  Palette,
 } from "lucide-react";
 import Colors from "../constants/colors";
 
@@ -25,14 +28,29 @@ import Colors from "../constants/colors";
 const API_BASE = "https://customer-7bcb.onrender.com";
 
 // ─── Types matching backend ──────────────────────────────────────────────────
+interface OrderItemImage {
+  url: string;
+  publicId: string;
+  isPrimary: boolean;
+  altText?: string;
+}
+
 interface OrderItem {
   _id?: string;
   product: string;
   name: string;
   brand?: string;
+  category?: string;
+  type?: string;
+  color?: string;
+  warranty?: string;
   imageUrl?: string;
-  unit: string;
-  weightOrSize?: string;
+  images?: OrderItemImage[];
+  specifications?: Record<string, string>;
+  compatibility?: string[];
+  dimensions?: string;
+  weight?: string;
+  material?: string;
   sellingPrice: number;
   originalPrice?: number;
   quantity: number;
@@ -202,17 +220,25 @@ function getCustomerAddress(order: Order): string {
 
 function buildWhatsAppMessage(order: Order): string {
   const lines = [
-    `🏥 *Customer App*`,
+    `📱 *Electronics Store*`,
     `📋 Order: ${order.orderNumber}`,
     `👤 Customer: ${getCustomerName(order)}`,
     `📞 Phone: +91 ${getCustomerPhone(order)}`,
     `📍 Address: ${getCustomerAddress(order)}`,
     ``,
     `*Order Items:*`,
-    ...order.items.map(
-      (item) =>
-        `• ${item.name} × ${item.quantity} ${item.unit} — ₹${item.lineTotal}`,
-    ),
+    ...order.items.map((item) => {
+      const details = [
+        item.brand,
+        item.type,
+        item.color,
+        item.warranty && item.warranty !== "No Warranty" ? item.warranty : null,
+      ]
+        .filter(Boolean)
+        .join(" · ");
+
+      return `• ${item.name}${details ? ` (${details})` : ""} × ${item.quantity} — ₹${item.lineTotal}`;
+    }),
     ``,
     `💰 *Total: ₹${order.totalAmount}*`,
     order.note ? `\n📝 Note: ${order.note}` : "",
@@ -446,16 +472,67 @@ function OrderDrawer({
                     >
                       {item.name}
                     </p>
-                    <p className="text-xs" style={{ color: Colors.textMuted }}>
-                      ₹{item.sellingPrice} / {item.unit}
+                    {/* Product Details */}
+                    <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                      {item.brand && (
+                        <span
+                          className="text-xs font-medium"
+                          style={{ color: Colors.primary }}
+                        >
+                          {item.brand}
+                        </span>
+                      )}
+                      {item.type && (
+                        <span
+                          className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-md"
+                          style={{
+                            background: Colors.surface,
+                            color: Colors.textSecondary,
+                          }}
+                        >
+                          <Cable size={10} strokeWidth={2} />
+                          {item.type}
+                        </span>
+                      )}
+                      {item.color && (
+                        <span
+                          className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-md"
+                          style={{
+                            background: Colors.surface,
+                            color: Colors.textSecondary,
+                          }}
+                        >
+                          <Palette size={10} strokeWidth={2} />
+                          {item.color}
+                        </span>
+                      )}
+                      {item.warranty && item.warranty !== "No Warranty" && (
+                        <span
+                          className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-md"
+                          style={{
+                            background: Colors.surface,
+                            color: Colors.success,
+                          }}
+                        >
+                          <Shield size={10} strokeWidth={2} />
+                          {item.warranty}
+                        </span>
+                      )}
+                    </div>
+                    {/* Price info */}
+                    <p
+                      className="text-xs mt-1"
+                      style={{ color: Colors.textMuted }}
+                    >
+                      ₹{item.sellingPrice} × {item.quantity}
+                      {item.originalPrice &&
+                        item.originalPrice > item.sellingPrice && (
+                          <span className="line-through ml-1">
+                            ₹{item.originalPrice}
+                          </span>
+                        )}
                     </p>
                   </div>
-                  <span
-                    className="text-sm font-bold"
-                    style={{ color: Colors.textPrimary }}
-                  >
-                    {item.quantity} {item.unit}
-                  </span>
                   <span
                     className="text-sm font-bold"
                     style={{ color: Colors.primary }}
@@ -572,7 +649,7 @@ export default function Orders() {
       setError(null);
       const data = await fetchAllOrders({ limit: 100 });
       setOrders(data.orders || []);
-      console.log(`📦 Loaded ${data.orders?.length || 0} orders`);
+      console.log(`📦 Loaded ${data.orders?.length || 0} electronics orders`);
     } catch (err: any) {
       console.error("Failed to load orders:", err);
       setError(err.message || "Failed to load orders");
@@ -612,7 +689,13 @@ export default function Orders() {
         const matchSearch =
           o.orderNumber.toLowerCase().includes(q) ||
           getCustomerName(o).toLowerCase().includes(q) ||
-          getCustomerPhone(o).includes(q);
+          getCustomerPhone(o).includes(q) ||
+          o.items.some(
+            (item) =>
+              item.name.toLowerCase().includes(q) ||
+              (item.brand && item.brand.toLowerCase().includes(q)) ||
+              (item.type && item.type.toLowerCase().includes(q)),
+          );
         const matchStatus = statusFilter === "All" || o.status === statusFilter;
         const matchPay = payFilter === "All" || o.paymentStatus === payFilter;
         return matchSearch && matchStatus && matchPay;
@@ -700,7 +783,7 @@ export default function Orders() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <ClipboardList size={20} color={Colors.primary} />
+            <Smartphone size={20} color={Colors.primary} />
             <div>
               <h1
                 className="text-xl font-bold"
@@ -709,7 +792,7 @@ export default function Orders() {
                 Orders
               </h1>
               <p className="text-xs" style={{ color: Colors.textMuted }}>
-                Manage all customer orders
+                Manage electronics accessories orders
               </p>
             </div>
           </div>
@@ -835,7 +918,7 @@ export default function Orders() {
             />
             <input
               type="text"
-              placeholder="Search by order no, name, phone…"
+              placeholder="Search by order, product, brand, type…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               onFocus={() => setSearchFocused(true)}
@@ -891,7 +974,7 @@ export default function Orders() {
             </p>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[820px]">
+            <table className="w-full min-w-[900px]">
               <thead>
                 <tr style={{ background: Colors.surfaceAlt }}>
                   {[
@@ -918,7 +1001,7 @@ export default function Orders() {
                 {filtered.length === 0 ? (
                   <tr>
                     <td colSpan={8} className="py-16 text-center">
-                      <ClipboardList size={36} color={Colors.border} />
+                      <Smartphone size={36} color={Colors.border} />
                       <p
                         className="text-sm mt-2"
                         style={{ color: Colors.textMuted }}
@@ -977,6 +1060,15 @@ export default function Orders() {
                           {order.items.length} item
                           {order.items.length > 1 ? "s" : ""}
                         </p>
+                        {/* Show first item type */}
+                        {order.items[0]?.type && (
+                          <p
+                            className="text-xs"
+                            style={{ color: Colors.textMuted }}
+                          >
+                            {order.items[0].type}
+                          </p>
+                        )}
                       </td>
                       <td className="px-5 py-4">
                         <p

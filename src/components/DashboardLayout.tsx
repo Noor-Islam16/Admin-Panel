@@ -56,8 +56,6 @@ const NAV_ITEMS = [
 
 export default function DashboardLayout() {
   const navigate = useNavigate();
-  // FIX: load the real admin email from the backend so it always reflects
-  // the current value — even after the admin changes it in Settings
   const [adminEmail, setAdminEmail] = useState("");
 
   useEffect(() => {
@@ -66,10 +64,10 @@ export default function DashboardLayout() {
       .catch(() => setAdminEmail("admin"));
   }, []);
 
+  // ── LOGOUT: clears the stored token so auto-login won't fire next visit ──
   const handleLogout = () => {
-    // FIX: was "adminAuth" — must match the key set in AdminLoginPage
     localStorage.removeItem("token");
-    navigate("/");
+    navigate("/", { replace: true });
   };
 
   return (
@@ -119,12 +117,12 @@ export default function DashboardLayout() {
               className="text-sm font-bold leading-tight"
               style={{ color: Colors.white }}
             >
-              Customer App
+              JholeSalers
             </p>
           </div>
         </div>
 
-        {/* Nav Items — full label names on desktop */}
+        {/* Nav Items */}
         <nav className="flex-1 px-3 py-4 flex flex-col gap-1 overflow-y-auto">
           {NAV_ITEMS.map(({ label, icon: Icon, path }) => (
             <NavLink
@@ -243,9 +241,8 @@ export default function DashboardLayout() {
                 className="text-sm font-semibold"
                 style={{ color: Colors.textPrimary }}
               >
-                Admin
+                JholeSalers
               </p>
-              {/* FIX: real email from DB, not a hardcoded env var */}
               <p className="text-xs" style={{ color: Colors.textMuted }}>
                 {adminEmail}
               </p>
@@ -257,7 +254,7 @@ export default function DashboardLayout() {
                 color: Colors.white,
               }}
             >
-              A
+              J
             </div>
           </div>
         </header>

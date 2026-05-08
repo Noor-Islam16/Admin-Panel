@@ -1,44 +1,21 @@
 import { useState, useEffect } from "react";
 import {
   Settings,
-  MessageCircle,
-  Bell,
   ShieldCheck,
   Trash2,
   CheckCircle2,
   AlertTriangle,
   X,
-  Phone,
   Mail,
   Eye,
   EyeOff,
-  Plus,
   Lock,
-  ToggleLeft,
-  ToggleRight,
-  ChevronRight,
   Users,
   Save,
   RefreshCw,
 } from "lucide-react";
 import Colors from "../constants/colors";
 import { AdminAPI } from "../config/api";
-
-// ── Types ─────────────────────────────────────────────────────────────────────
-interface WhatsAppRecipient {
-  id: string;
-  label: string;
-  number: string;
-  isGroup: boolean;
-  active: boolean;
-}
-
-interface NotificationTemplate {
-  id: string;
-  event: string;
-  message: string;
-  active: boolean;
-}
 
 // ── Toast ─────────────────────────────────────────────────────────────────────
 function Toast({
@@ -110,7 +87,10 @@ function SectionCard({
           <Icon size={20} color={Colors.white} strokeWidth={1.8} />
         </div>
         <div>
-          <p className="text-sm font-bold" style={{ color: Colors.textPrimary }}>
+          <p
+            className="text-sm font-bold"
+            style={{ color: Colors.textPrimary }}
+          >
             {title}
           </p>
           <p className="text-xs" style={{ color: Colors.textMuted }}>
@@ -124,7 +104,13 @@ function SectionCard({
 }
 
 // ── Field Row ─────────────────────────────────────────────────────────────────
-function FieldRow({ label, children }: { label: string; children: React.ReactNode }) {
+function FieldRow({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="flex flex-col gap-1.5">
       <label
@@ -196,46 +182,6 @@ function InputField({
 }
 
 // ── Toggle Row ────────────────────────────────────────────────────────────────
-function ToggleRow({
-  label,
-  description,
-  value,
-  onChange,
-}: {
-  label: string;
-  description: string;
-  value: boolean;
-  onChange: (v: boolean) => void;
-}) {
-  return (
-    <div
-      className="flex items-center justify-between px-4 py-3.5 rounded-2xl"
-      style={{
-        background: Colors.surfaceAlt,
-        border: `1.5px solid ${Colors.border}`,
-      }}
-    >
-      <div>
-        <p className="text-sm font-semibold" style={{ color: Colors.textPrimary }}>
-          {label}
-        </p>
-        <p className="text-xs mt-0.5" style={{ color: Colors.textMuted }}>
-          {description}
-        </p>
-      </div>
-      <button
-        onClick={() => onChange(!value)}
-        style={{ color: value ? Colors.primary : Colors.textMuted, flexShrink: 0, marginLeft: 12 }}
-      >
-        {value ? (
-          <ToggleRight size={34} strokeWidth={1.5} />
-        ) : (
-          <ToggleLeft size={34} strokeWidth={1.5} />
-        )}
-      </button>
-    </div>
-  );
-}
 
 // ── Save Button ───────────────────────────────────────────────────────────────
 function SaveBtn({
@@ -261,9 +207,26 @@ function SaveBtn({
       }}
     >
       {loading ? (
-        <svg className="animate-spin" width="16" height="16" viewBox="0 0 24 24" fill="none">
-          <circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.3)" strokeWidth="3" />
-          <path d="M12 2a10 10 0 0 1 10 10" stroke="white" strokeWidth="3" strokeLinecap="round" />
+        <svg
+          className="animate-spin"
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+        >
+          <circle
+            cx="12"
+            cy="12"
+            r="10"
+            stroke="rgba(255,255,255,0.3)"
+            strokeWidth="3"
+          />
+          <path
+            d="M12 2a10 10 0 0 1 10 10"
+            stroke="white"
+            strokeWidth="3"
+            strokeLinecap="round"
+          />
         </svg>
       ) : (
         <Save size={16} strokeWidth={2} />
@@ -277,7 +240,10 @@ function SaveBtn({
 //  MAIN COMPONENT
 // ══════════════════════════════════════════════════════════════════════════════
 export default function SettingsPage() {
-  const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [toast, setToast] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
   const [loading, setLoading] = useState<Record<string, boolean>>({});
   const [focused, setFocused] = useState("");
   const [showOldPass, setShowOldPass] = useState(false);
@@ -290,66 +256,6 @@ export default function SettingsPage() {
     setToast({ type, message });
     setTimeout(() => setToast(null), 3200);
   };
-
-  // Generic mock save (still used for WhatsApp / templates until you add those endpoints)
-  const save = async (key: string, msg: string) => {
-    setLoading((prev) => ({ ...prev, [key]: true }));
-    await new Promise((r) => setTimeout(r, 900));
-    setLoading((prev) => ({ ...prev, [key]: false }));
-    showToast("success", msg);
-  };
-
-  // ── WhatsApp Config ────────────────────────────────────────────────────────
-  const [waRecipients, setWaRecipients] = useState<WhatsAppRecipient[]>([
-    { id: "1", label: "Delivery Team", number: "9876543210", isGroup: false, active: true },
-    { id: "2", label: "Accounts", number: "9876500000", isGroup: false, active: true },
-    { id: "3", label: "Internal Group", number: "120363xxxxxx@g.us", isGroup: true, active: false },
-  ]);
-  const [newRecipient, setNewRecipient] = useState({ label: "", number: "", isGroup: false });
-  const [showAddRecipient, setShowAddRecipient] = useState(false);
-  const [waSettings, setWaSettings] = useState({
-    sendOnOrderPlaced: true,
-    sendOnOrderAltered: true,
-    sendOnDispatched: true,
-    includeLocation: true,
-    includeGstDetails: true,
-  });
-
-  // ── Notification Templates ─────────────────────────────────────────────────
-  const [templates, setTemplates] = useState<NotificationTemplate[]>([
-    {
-      id: "1",
-      event: "New Order Placed",
-      message: "🛍️ New order {{orderNo}} from {{customerName}} for ₹{{total}}. Review now.",
-      active: true,
-    },
-    {
-      id: "2",
-      event: "Order Dispatched",
-      message: "🚚 Order {{orderNo}} dispatched to {{customerName}}. Delivery in progress.",
-      active: true,
-    },
-    {
-      id: "3",
-      event: "Payment Received",
-      message: "💰 Payment of ₹{{amount}} received for order {{orderNo}}.",
-      active: true,
-    },
-    {
-      id: "4",
-      event: "Low Stock Alert",
-      message: "⚠️ {{productName}} is running low ({{qty}} units left). Restock soon.",
-      active: false,
-    },
-    {
-      id: "5",
-      event: "Out of Stock",
-      message: "❌ {{productName}} is now OUT OF STOCK. Orders will be blocked.",
-      active: true,
-    },
-  ]);
-  const [editingTemplate, setEditingTemplate] = useState<string | null>(null);
-  const [templateDraft, setTemplateDraft] = useState("");
 
   // ── Admin Credentials ──────────────────────────────────────────────────────
   // FIX: Separate email section fields from password section fields.
@@ -381,32 +287,6 @@ export default function SettingsPage() {
   // ─────────────────────────────────────────────────────────────────────────
   //  Handlers
   // ─────────────────────────────────────────────────────────────────────────
-  const handleAddRecipient = () => {
-    if (!newRecipient.label.trim() || !newRecipient.number.trim()) {
-      showToast("error", "Label and number are required.");
-      return;
-    }
-    setWaRecipients((prev) => [
-      ...prev,
-      { id: Date.now().toString(), ...newRecipient, active: true },
-    ]);
-    setNewRecipient({ label: "", number: "", isGroup: false });
-    setShowAddRecipient(false);
-    showToast("success", "Recipient added!");
-  };
-
-  const handleRemoveRecipient = (id: string) => {
-    setWaRecipients((prev) => prev.filter((r) => r.id !== id));
-    showToast("success", "Recipient removed.");
-  };
-
-  const handleSaveTemplate = (id: string) => {
-    setTemplates((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, message: templateDraft } : t)),
-    );
-    setEditingTemplate(null);
-    showToast("success", "Template saved!");
-  };
 
   // ── Change Email (real API) ────────────────────────────────────────────────
   const handleChangeEmail = async () => {
@@ -431,7 +311,10 @@ export default function SettingsPage() {
       setEmailForm({ newEmail: "", currentPasswordForEmail: "" });
       showToast("success", "Email updated successfully!");
     } catch (err: unknown) {
-      showToast("error", err instanceof Error ? err.message : "Failed to update email.");
+      showToast(
+        "error",
+        err instanceof Error ? err.message : "Failed to update email.",
+      );
     } finally {
       setLoading((p) => ({ ...p, email: false }));
     }
@@ -439,7 +322,11 @@ export default function SettingsPage() {
 
   // ── Change Password (real API) ─────────────────────────────────────────────
   const handleChangePassword = async () => {
-    if (!passwordForm.oldPassword || !passwordForm.newPassword || !passwordForm.confirmPassword) {
+    if (
+      !passwordForm.oldPassword ||
+      !passwordForm.newPassword ||
+      !passwordForm.confirmPassword
+    ) {
       showToast("error", "All password fields are required.");
       return;
     }
@@ -459,10 +346,17 @@ export default function SettingsPage() {
         passwordForm.newPassword,
         passwordForm.confirmPassword,
       );
-      setPasswordForm({ oldPassword: "", newPassword: "", confirmPassword: "" });
+      setPasswordForm({
+        oldPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+      });
       showToast("success", "Password updated successfully!");
     } catch (err: unknown) {
-      showToast("error", err instanceof Error ? err.message : "Failed to update password.");
+      showToast(
+        "error",
+        err instanceof Error ? err.message : "Failed to update password.",
+      );
     } finally {
       setLoading((p) => ({ ...p, password: false }));
     }
@@ -481,7 +375,11 @@ export default function SettingsPage() {
   return (
     <>
       {toast && (
-        <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} />
+        <Toast
+          type={toast.type}
+          message={toast.message}
+          onClose={() => setToast(null)}
+        />
       )}
 
       <div className="flex flex-col gap-6 pb-8">
@@ -489,7 +387,10 @@ export default function SettingsPage() {
         <div className="flex items-center gap-2">
           <Settings size={20} color={Colors.primary} strokeWidth={2} />
           <div>
-            <h1 className="text-xl font-bold" style={{ color: Colors.textPrimary }}>
+            <h1
+              className="text-xl font-bold"
+              style={{ color: Colors.textPrimary }}
+            >
               Settings
             </h1>
             <p className="text-xs" style={{ color: Colors.textMuted }}>
@@ -501,13 +402,12 @@ export default function SettingsPage() {
         {/* ══════════════════════════════════════
             2. WHATSAPP CONFIGURATION
         ══════════════════════════════════════ */}
-        <SectionCard
+        {/* <SectionCard
           icon={MessageCircle}
           title="WhatsApp Configuration"
           subtitle="Recipients and sharing preferences for order notifications"
         >
           <div className="flex flex-col gap-5">
-            {/* Recipients list */}
             <div>
               <div className="flex items-center justify-between mb-3">
                 <p
@@ -596,7 +496,6 @@ export default function SettingsPage() {
                 ))}
               </div>
 
-              {/* Add recipient inline form */}
               {showAddRecipient && (
                 <div
                   className="mt-3 p-4 rounded-2xl flex flex-col gap-3"
@@ -698,7 +597,6 @@ export default function SettingsPage() {
               )}
             </div>
 
-            {/* Share preferences */}
             <div className="flex flex-col gap-2">
               <p
                 className="text-xs font-bold uppercase tracking-wide mb-1"
@@ -750,12 +648,12 @@ export default function SettingsPage() {
               />
             </div>
           </div>
-        </SectionCard>
+        </SectionCard> */}
 
         {/* ══════════════════════════════════════
             3. PUSH NOTIFICATION TEMPLATES
         ══════════════════════════════════════ */}
-        <SectionCard
+        {/* <SectionCard
           icon={Bell}
           title="Push Notification Templates"
           subtitle="Customize in-app notification messages for each event"
@@ -763,26 +661,44 @@ export default function SettingsPage() {
           <div className="flex flex-col gap-3">
             <p
               className="text-xs px-3 py-2 rounded-xl"
-              style={{ background: Colors.primaryLight, color: Colors.textSecondary }}
+              style={{
+                background: Colors.primaryLight,
+                color: Colors.textSecondary,
+              }}
             >
               Available variables:{" "}
-              <span className="font-mono font-semibold" style={{ color: Colors.primary }}>
+              <span
+                className="font-mono font-semibold"
+                style={{ color: Colors.primary }}
+              >
                 {"{{orderNo}}"}
               </span>{" "}
               ·{" "}
-              <span className="font-mono font-semibold" style={{ color: Colors.primary }}>
+              <span
+                className="font-mono font-semibold"
+                style={{ color: Colors.primary }}
+              >
                 {"{{customerName}}"}
               </span>{" "}
               ·{" "}
-              <span className="font-mono font-semibold" style={{ color: Colors.primary }}>
+              <span
+                className="font-mono font-semibold"
+                style={{ color: Colors.primary }}
+              >
                 {"{{total}}"}
               </span>{" "}
               ·{" "}
-              <span className="font-mono font-semibold" style={{ color: Colors.primary }}>
+              <span
+                className="font-mono font-semibold"
+                style={{ color: Colors.primary }}
+              >
                 {"{{productName}}"}
               </span>{" "}
               ·{" "}
-              <span className="font-mono font-semibold" style={{ color: Colors.primary }}>
+              <span
+                className="font-mono font-semibold"
+                style={{ color: Colors.primary }}
+              >
                 {"{{qty}}"}
               </span>
             </p>
@@ -809,7 +725,10 @@ export default function SettingsPage() {
                       color={t.active ? Colors.primary : Colors.textMuted}
                       strokeWidth={2}
                     />
-                    <p className="text-sm font-semibold" style={{ color: Colors.textPrimary }}>
+                    <p
+                      className="text-sm font-semibold"
+                      style={{ color: Colors.textPrimary }}
+                    >
                       {t.event}
                     </p>
                   </div>
@@ -842,12 +761,16 @@ export default function SettingsPage() {
                         className="p-1.5 rounded-xl transition-colors"
                         style={{ color: Colors.textMuted }}
                         onMouseEnter={(e) => {
-                          (e.currentTarget as HTMLElement).style.color = Colors.primary;
-                          (e.currentTarget as HTMLElement).style.background = Colors.primaryLight;
+                          (e.currentTarget as HTMLElement).style.color =
+                            Colors.primary;
+                          (e.currentTarget as HTMLElement).style.background =
+                            Colors.primaryLight;
                         }}
                         onMouseLeave={(e) => {
-                          (e.currentTarget as HTMLElement).style.color = Colors.textMuted;
-                          (e.currentTarget as HTMLElement).style.background = "transparent";
+                          (e.currentTarget as HTMLElement).style.color =
+                            Colors.textMuted;
+                          (e.currentTarget as HTMLElement).style.background =
+                            "transparent";
                         }}
                       >
                         <ChevronRight size={16} strokeWidth={2} />
@@ -856,10 +779,14 @@ export default function SettingsPage() {
                     <button
                       onClick={() =>
                         setTemplates((prev) =>
-                          prev.map((x) => (x.id === t.id ? { ...x, active: !x.active } : x)),
+                          prev.map((x) =>
+                            x.id === t.id ? { ...x, active: !x.active } : x,
+                          ),
                         )
                       }
-                      style={{ color: t.active ? Colors.primary : Colors.textMuted }}
+                      style={{
+                        color: t.active ? Colors.primary : Colors.textMuted,
+                      }}
                     >
                       {t.active ? (
                         <ToggleRight size={28} strokeWidth={1.5} />
@@ -884,7 +811,10 @@ export default function SettingsPage() {
                       autoFocus
                     />
                   ) : (
-                    <p className="text-sm leading-relaxed" style={{ color: Colors.textSecondary }}>
+                    <p
+                      className="text-sm leading-relaxed"
+                      style={{ color: Colors.textSecondary }}
+                    >
                       {t.message}
                     </p>
                   )}
@@ -892,7 +822,7 @@ export default function SettingsPage() {
               </div>
             ))}
           </div>
-        </SectionCard>
+        </SectionCard> */}
 
         {/* ══════════════════════════════════════
             4. ADMIN CREDENTIALS
@@ -935,13 +865,21 @@ export default function SettingsPage() {
               <div
                 className="relative flex items-center rounded-2xl overflow-hidden transition-all duration-200"
                 style={{
-                  background: focused === "emailpass" ? Colors.primaryLight : Colors.surfaceAlt,
+                  background:
+                    focused === "emailpass"
+                      ? Colors.primaryLight
+                      : Colors.surfaceAlt,
                   border: `1.5px solid ${focused === "emailpass" ? Colors.borderFocus : Colors.border}`,
                 }}
               >
                 <div
                   className="absolute left-3.5 pointer-events-none"
-                  style={{ color: focused === "emailpass" ? Colors.primary : Colors.textMuted }}
+                  style={{
+                    color:
+                      focused === "emailpass"
+                        ? Colors.primary
+                        : Colors.textMuted,
+                  }}
                 >
                   <Lock size={17} strokeWidth={2} />
                 </div>
@@ -949,7 +887,10 @@ export default function SettingsPage() {
                   type={showEmailPass ? "text" : "password"}
                   value={emailForm.currentPasswordForEmail}
                   onChange={(e) =>
-                    setEmailForm((p) => ({ ...p, currentPasswordForEmail: e.target.value }))
+                    setEmailForm((p) => ({
+                      ...p,
+                      currentPasswordForEmail: e.target.value,
+                    }))
                   }
                   onFocus={() => setFocused("emailpass")}
                   onBlur={() => setFocused("")}
@@ -961,7 +902,9 @@ export default function SettingsPage() {
                   type="button"
                   onClick={() => setShowEmailPass((v) => !v)}
                   className="absolute right-3.5 transition-colors"
-                  style={{ color: showEmailPass ? Colors.primary : Colors.textMuted }}
+                  style={{
+                    color: showEmailPass ? Colors.primary : Colors.textMuted,
+                  }}
                   tabIndex={-1}
                 >
                   {showEmailPass ? (
@@ -981,7 +924,10 @@ export default function SettingsPage() {
               />
             </div>
 
-            <div className="my-1" style={{ borderTop: `1px solid ${Colors.divider}` }} />
+            <div
+              className="my-1"
+              style={{ borderTop: `1px solid ${Colors.divider}` }}
+            />
 
             {/* ── PASSWORD SECTION ── */}
             <p
@@ -1017,13 +963,17 @@ export default function SettingsPage() {
                 <div
                   className="relative flex items-center rounded-2xl overflow-hidden transition-all duration-200"
                   style={{
-                    background: focused === key ? Colors.primaryLight : Colors.surfaceAlt,
+                    background:
+                      focused === key ? Colors.primaryLight : Colors.surfaceAlt,
                     border: `1.5px solid ${focused === key ? Colors.borderFocus : Colors.border}`,
                   }}
                 >
                   <div
                     className="absolute left-3.5 pointer-events-none"
-                    style={{ color: focused === key ? Colors.primary : Colors.textMuted }}
+                    style={{
+                      color:
+                        focused === key ? Colors.primary : Colors.textMuted,
+                    }}
                   >
                     <Lock size={17} strokeWidth={2} />
                   </div>
@@ -1123,7 +1073,10 @@ export default function SettingsPage() {
                 <div className="flex items-center gap-3">
                   <Icon size={18} color={Colors.error} strokeWidth={2} />
                   <div>
-                    <p className="text-sm font-semibold" style={{ color: Colors.textPrimary }}>
+                    <p
+                      className="text-sm font-semibold"
+                      style={{ color: Colors.textPrimary }}
+                    >
                       {label}
                     </p>
                     <p className="text-xs" style={{ color: Colors.textMuted }}>
@@ -1140,11 +1093,13 @@ export default function SettingsPage() {
                     border: `1.5px solid #FFD0DA`,
                   }}
                   onMouseEnter={(e) => {
-                    (e.currentTarget as HTMLElement).style.background = Colors.error;
+                    (e.currentTarget as HTMLElement).style.background =
+                      Colors.error;
                     (e.currentTarget as HTMLElement).style.color = Colors.white;
                   }}
                   onMouseLeave={(e) => {
-                    (e.currentTarget as HTMLElement).style.background = "#FFF0F3";
+                    (e.currentTarget as HTMLElement).style.background =
+                      "#FFF0F3";
                     (e.currentTarget as HTMLElement).style.color = Colors.error;
                   }}
                 >
@@ -1184,15 +1139,22 @@ export default function SettingsPage() {
               >
                 <AlertTriangle size={24} color={Colors.error} strokeWidth={2} />
               </div>
-              <h3 className="text-base font-bold mb-1" style={{ color: Colors.textPrimary }}>
+              <h3
+                className="text-base font-bold mb-1"
+                style={{ color: Colors.textPrimary }}
+              >
                 Are you absolutely sure?
               </h3>
-              <p className="text-sm mb-4" style={{ color: Colors.textSecondary }}>
+              <p
+                className="text-sm mb-4"
+                style={{ color: Colors.textSecondary }}
+              >
                 This action is{" "}
                 <span className="font-bold" style={{ color: Colors.error }}>
                   permanent and irreversible
                 </span>
-                . Type <span className="font-mono font-bold">RESET</span> to confirm.
+                . Type <span className="font-mono font-bold">RESET</span> to
+                confirm.
               </p>
               <input
                 type="text"
@@ -1225,7 +1187,8 @@ export default function SettingsPage() {
                   onClick={handleDangerReset}
                   className="flex-1 py-2.5 rounded-2xl text-sm font-semibold transition-all duration-150"
                   style={{
-                    background: dangerInput === "RESET" ? Colors.error : "#FFD0DA",
+                    background:
+                      dangerInput === "RESET" ? Colors.error : "#FFD0DA",
                     color: dangerInput === "RESET" ? Colors.white : "#FFAAAA",
                     cursor: dangerInput === "RESET" ? "pointer" : "not-allowed",
                   }}
