@@ -240,7 +240,7 @@ function buildWhatsAppMessage(order: Order): string {
   const customerAddress = getCustomerAddress(order);
 
   const lines = [
-    `📱 *Electronics Store - Order Details*`,
+    `📱 *JholeSalers Store - Order Details*`,
     ``,
     `📋 *Order:* ${order.orderNumber}`,
     `📅 *Date:* ${new Date(order.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`,
