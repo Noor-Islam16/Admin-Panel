@@ -226,7 +226,7 @@ export default function DashboardLayout() {
                 Admin Dashboard
               </h2>
               <p className="text-xs" style={{ color: Colors.textMuted }}>
-                Customer App
+                Thump Beyond Limits
               </p>
             </div>
           </div>
