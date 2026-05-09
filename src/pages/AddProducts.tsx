@@ -17,7 +17,6 @@ import {
   Smartphone,
   Boxes,
   Plus,
-  ImagePlus,
 } from "lucide-react";
 import Colors from "../constants/colors";
 import { CATEGORIES } from "../constants/products";
@@ -35,12 +34,6 @@ interface ProductForm {
   description: string;
 }
 
-interface BulkRowImage {
-  file: File;
-  preview: string;
-  isPrimary: boolean;
-}
-
 interface BulkRow {
   id: string;
   name: string;
@@ -49,12 +42,11 @@ interface BulkRow {
   price: string;
   originalPrice: string;
   description: string;
+  image_urls: string;
   min_order_qty: string;
   stock: string;
   status: "valid" | "error";
   error?: string;
-  images: BulkRowImage[];
-  expanded: boolean;
 }
 
 const EMPTY_FORM: ProductForm = {
@@ -280,7 +272,6 @@ export default function AddProducts() {
       if (form.description.trim())
         fd.append("description", form.description.trim());
       imageFiles.forEach((file) => fd.append("images", file));
-
       await ProductAPI.addSingle(fd);
       showToast("success", `"${form.name}" added successfully!`);
       setForm(EMPTY_FORM);
@@ -295,7 +286,7 @@ export default function AddProducts() {
     }
   };
 
-  // ── Bulk Handlers ──────────────────────────────────────────────────────────
+  // ── Parse uploaded file (CSV or Excel) ──────────────────────────────────────
   const parseFile = useCallback((file: File) => {
     const isExcel = file.name.endsWith(".xlsx") || file.name.endsWith(".xls");
 
@@ -307,22 +298,18 @@ export default function AddProducts() {
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
         const rawRows = XLSX.utils.sheet_to_json<Record<string, string>>(
           sheet,
-          {
-            defval: "",
-            raw: false,
-          },
+          { defval: "", raw: false },
         );
         buildBulkRows(rawRows);
       };
-      reader.readAsArrayBuffer(file); // ← correct for binary xlsx
+      reader.readAsArrayBuffer(file);
     } else {
       const reader = new FileReader();
       reader.onload = (ev) => {
-        const text = (ev.target?.result as string).replace(/^\uFEFF/, ""); // strip BOM
+        const text = (ev.target?.result as string).replace(/^\uFEFF/, "");
         const lines = text.trim().split(/\r?\n/);
         if (lines.length < 2) return;
 
-        // Auto-detect delimiter
         const firstLine = lines[0];
         const delimiter =
           (firstLine.match(/;/g) || []).length >
@@ -349,28 +336,48 @@ export default function AddProducts() {
     }
   }, []);
 
-  // ── normalize keys + build BulkRow[] ─────────────────────────────────────────
+  // ── Build bulk rows from parsed data ────────────────────────────────────────
   const buildBulkRows = useCallback((rawRows: Record<string, string>[]) => {
     const rows: BulkRow[] = rawRows.map((raw, i) => {
-      // Normalize keys: "Name" → "name", "Original Price" → "original_price"
+      // Normalize keys
       const obj: Record<string, string> = {};
       Object.keys(raw).forEach((key) => {
         const normalized = key
-          .replace(/^\uFEFF/, "") // BOM on first key
+          .replace(/^\uFEFF/, "")
           .trim()
           .toLowerCase()
           .replace(/\s+/g, "_")
           .replace(/[^a-z0-9_]/g, "");
         obj[normalized] = String(raw[key] ?? "")
           .trim()
-          .replace(/^[₹$€£¥]+/, "") // strip currency symbols
-          .replace(/^"|"$/g, ""); // strip stray quotes
+          .replace(/^[₹$€£¥]+/, "")
+          .replace(/^"|"$/g, "");
       });
 
-      // Normalize numeric fields (remove thousand separators like "1,499")
+      // Normalize numeric fields
       ["price", "original_price", "stock", "min_order_qty"].forEach((f) => {
         if (obj[f]) obj[f] = obj[f].replace(/,/g, "").replace(/\.0+$/, "");
       });
+
+      // ✅ COLLECT IMAGES FROM image_1 through image_8 columns - NO CONVERSION
+      const imageUrls: string[] = [];
+      for (let j = 1; j <= 8; j++) {
+        const url = obj[`image_${j}`];
+        if (url && url.trim()) {
+          // Just use the URL as-is (Cloudinary URLs work directly)
+          imageUrls.push(url.trim());
+        }
+      }
+
+      // Also check old format image_urls column as fallback
+      if (imageUrls.length === 0 && obj["image_urls"]) {
+        obj["image_urls"].split(",").forEach((url: string) => {
+          const trimmed = url.trim();
+          if (trimmed) {
+            imageUrls.push(trimmed);
+          }
+        });
+      }
 
       const hasError =
         !obj["name"] || !obj["price"] || !obj["stock"] || !obj["category"];
@@ -382,6 +389,7 @@ export default function AddProducts() {
         price: obj["price"] ?? "",
         originalPrice: obj["original_price"] ?? "",
         description: obj["description"] ?? "",
+        image_urls: imageUrls.join(","),
         min_order_qty: obj["min_order_qty"] ?? "1",
         stock: obj["stock"] ?? "",
         status: hasError ? "error" : "valid",
@@ -394,8 +402,6 @@ export default function AddProducts() {
                 ? "Stock missing"
                 : "Category missing"
           : undefined,
-        images: [],
-        expanded: false,
       };
     });
     setBulkRows(rows);
@@ -413,7 +419,7 @@ export default function AddProducts() {
         return;
       }
       bulkFileRef.current = file;
-      parseFile(file); // ← was: reader.readAsText → parseCsv
+      parseFile(file);
     },
     [parseFile],
   );
@@ -422,140 +428,33 @@ export default function AddProducts() {
     const file = e.target.files?.[0];
     if (!file) return;
     bulkFileRef.current = file;
-    parseFile(file); // ← was: reader.readAsText → parseCsv
-  };
-
-  // ── Bulk Row Image Management ─────────────────────────────────────────────
-  const toggleRowExpand = (rowId: string) => {
-    setBulkRows((prev) =>
-      prev.map((r) => (r.id === rowId ? { ...r, expanded: !r.expanded } : r)),
-    );
-  };
-
-  const addImagesToRow = (rowId: string, files: FileList) => {
-    const newImages: BulkRowImage[] = Array.from(files).map((file, _index) => ({
-      file,
-      preview: URL.createObjectURL(file),
-      isPrimary: false,
-    }));
-    setBulkRows((prev) =>
-      prev.map((r) => {
-        if (r.id !== rowId) return r;
-        const totalImages = r.images.length + newImages.length;
-        if (totalImages > 8) {
-          showToast("error", "Maximum 8 images per product");
-          return r;
-        }
-        // Make first image primary if no images exist
-        if (r.images.length === 0 && newImages.length > 0) {
-          newImages[0].isPrimary = true;
-        }
-        return { ...r, images: [...r.images, ...newImages], expanded: true };
-      }),
-    );
-  };
-
-  const removeBulkImage = (rowId: string, imageIndex: number) => {
-    setBulkRows((prev) =>
-      prev.map((r) => {
-        if (r.id !== rowId) return r;
-        const image = r.images[imageIndex];
-        URL.revokeObjectURL(image.preview);
-        const newImages = r.images.filter((_, i) => i !== imageIndex);
-        // If removed image was primary, set first remaining as primary
-        if (image.isPrimary && newImages.length > 0) {
-          newImages[0].isPrimary = true;
-        }
-        return { ...r, images: newImages };
-      }),
-    );
-  };
-
-  const setBulkImagePrimary = (rowId: string, imageIndex: number) => {
-    setBulkRows((prev) =>
-      prev.map((r) => {
-        if (r.id !== rowId) return r;
-        return {
-          ...r,
-          images: r.images.map((img, i) => ({
-            ...img,
-            isPrimary: i === imageIndex,
-          })),
-        };
-      }),
-    );
+    parseFile(file);
   };
 
   const removeRow = (id: string) => {
-    // Clean up image previews
-    const row = bulkRows.find((r) => r.id === id);
-    if (row) {
-      row.images.forEach((img) => URL.revokeObjectURL(img.preview));
-    }
     setBulkRows((prev) => prev.filter((r) => r.id !== id));
   };
 
-  // ── Bulk Submit ───────────────────────────────────────────────────────────
-  // ── Bulk Submit (with per-product image upload) ──────────────────────────────
+  // ── Bulk Submit (sends the file directly to backend) ────────────────────────
   const handleBulkSubmit = async () => {
-    const validRows = bulkRows.filter((r) => r.status === "valid");
-    if (validRows.length === 0) {
+    const validCount = bulkRows.filter((r) => r.status === "valid").length;
+    if (!validCount) {
       showToast("error", "No valid rows to upload.");
+      return;
+    }
+    if (!bulkFileRef.current) {
+      showToast("error", "File reference lost — please re-upload the file.");
       return;
     }
 
     setBulkSubmitting(true);
     setBulkUploadResult(null);
-
-    let successCount = 0;
-    let failedCount = 0;
-    const failedRows: { row: number; errors: unknown }[] = [];
-
     try {
-      // Upload each valid product individually with its images
-      for (let i = 0; i < validRows.length; i++) {
-        const row = validRows[i];
-        try {
-          const fd = new FormData();
-          fd.append("name", row.name.trim());
-          fd.append("category", row.category);
-          fd.append("sellingPrice", row.price);
-          fd.append("stockQuantity", row.stock);
-          fd.append("minOrderQuantity", row.min_order_qty || "1");
-          if (row.brand.trim()) fd.append("brand", row.brand.trim());
-          if (row.originalPrice) fd.append("originalPrice", row.originalPrice);
-          if (row.description.trim())
-            fd.append("description", row.description.trim());
+      const fd = new FormData();
+      fd.append("file", bulkFileRef.current);
 
-          // Append images for this product
-          if (row.images.length > 0) {
-            row.images.forEach((img, _imgIndex) => {
-              fd.append("images", img.file, img.file.name);
-            });
-
-            // Mark primary image
-            const primaryIndex = row.images.findIndex((img) => img.isPrimary);
-            if (primaryIndex >= 0) {
-              // The first image sent will be primary by default in the backend
-              // If primary is not the first, we'd need backend support
-            }
-          }
-
-          console.log(
-            `📤 Uploading product ${i + 1}/${validRows.length}: ${row.name}`,
-          );
-          await ProductAPI.addSingle(fd);
-          successCount++;
-          console.log(`✅ Product ${i + 1} uploaded: ${row.name}`);
-        } catch (err: any) {
-          failedCount++;
-          failedRows.push({
-            row: parseInt(row.id) + 2, // +2 for header and 0-index
-            errors: err.message || "Upload failed",
-          });
-          console.error(`❌ Failed to upload row ${row.id}:`, err);
-        }
-      }
+      const res = await ProductAPI.bulkUpload(fd);
+      const { successCount, failedCount, failedRows } = res.data;
 
       setBulkUploadResult({ successCount, failedCount, failedRows });
 
@@ -563,10 +462,6 @@ export default function AddProducts() {
         showToast(
           "success",
           `All ${successCount} products uploaded successfully!`,
-        );
-        // Clean up
-        bulkRows.forEach((r) =>
-          r.images.forEach((img) => URL.revokeObjectURL(img.preview)),
         );
         setBulkRows([]);
         bulkFileRef.current = null;
@@ -576,7 +471,7 @@ export default function AddProducts() {
           `${successCount} uploaded, ${failedCount} failed — see details below.`,
         );
       } else {
-        showToast("error", `All ${failedCount} rows failed to upload.`);
+        showToast("error", `All ${failedCount} rows failed validation.`);
       }
     } catch (e) {
       showToast(
@@ -588,9 +483,87 @@ export default function AddProducts() {
     }
   };
 
-  // ── Download Template (no image_urls) ──────────────────────────────────────
+  // ── Download Template with separate image columns ───────────────────────────
   const downloadTemplate = () => {
-    const csv = `name,brand,category,price,original_price,stock,min_order_qty,description\nUSB-C Fast Charging Cable,Anker,charging-cables,599,999,100,2,"Fast charging USB-C cable with 60W PD support"\nWireless Bluetooth Earbuds,boAt,headphones-earphones,1499,2990,50,1,"True wireless earbuds with ENC"\n20W PD Wall Charger,Spigen,chargers-adapters,799,1299,200,1,"Compact 20W PD fast charger"`;
+    const headers = [
+      "name",
+      "brand",
+      "category",
+      "price",
+      "original_price",
+      "stock",
+      "min_order_qty",
+      "description",
+      "image_1",
+      "image_2",
+      "image_3",
+      "image_4",
+      "image_5",
+      "image_6",
+      "image_7",
+      "image_8",
+    ];
+    const rows = [
+      [
+        "USB-C Fast Charging Cable",
+        "Anker",
+        "charging-cables",
+        "599",
+        "999",
+        "100",
+        "2",
+        "Fast charging USB-C cable with 60W PD support",
+        "https://res.cloudinary.com/your-cloud/image/upload/v123/product1.jpg",
+        "https://res.cloudinary.com/your-cloud/image/upload/v123/product1-back.jpg",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+      ],
+      [
+        "Wireless Bluetooth Earbuds",
+        "boAt",
+        "headphones-earphones",
+        "1499",
+        "2990",
+        "50",
+        "1",
+        "True wireless earbuds with ENC",
+        "https://res.cloudinary.com/your-cloud/image/upload/v123/product2.jpg",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+      ],
+      [
+        "20W PD Wall Charger",
+        "Spigen",
+        "chargers-adapters",
+        "799",
+        "1299",
+        "200",
+        "1",
+        "Compact 20W PD fast charger",
+        "https://res.cloudinary.com/your-cloud/image/upload/v123/product3.jpg",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+      ],
+    ];
+
+    const csv = [headers, ...rows]
+      .map((row) => row.map((cell) => `"${cell}"`).join(","))
+      .join("\n");
+
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -1066,7 +1039,7 @@ export default function AddProducts() {
                 border: `1px solid ${Colors.accentLight}`,
               }}
             >
-              <div className="flex flex-col gap-1">
+              <div className="flex flex-col gap-2 flex-1">
                 <p
                   className="text-sm font-bold"
                   style={{ color: Colors.accent }}
@@ -1077,15 +1050,47 @@ export default function AddProducts() {
                   className="text-xs leading-relaxed"
                   style={{ color: Colors.textSecondary }}
                 >
-                  Download CSV template → fill products → upload →{" "}
-                  <strong>add images below each product</strong>. Required:{" "}
-                  <strong>name</strong>, <strong>category</strong>,{" "}
+                  Download CSV template → fill products with{" "}
+                  <strong>
+                    Cloudinary image URLs in separate columns (image_1 to
+                    image_8)
+                  </strong>{" "}
+                  → upload.
+                  <br />
+                  Use Cloudinary to get image URLs:{" "}
+                  <code
+                    style={{
+                      background: Colors.surface,
+                      padding: "2px 6px",
+                      borderRadius: 4,
+                      fontSize: "11px",
+                      wordBreak: "break-all",
+                    }}
+                  >
+                    https://res.cloudinary.com/your-cloud/image/upload/v123/product.jpg
+                  </code>
+                  <br />
+                  Required: <strong>name</strong>, <strong>category</strong>,{" "}
                   <strong>price</strong>, <strong>stock</strong>.
                 </p>
+                <div className="flex flex-col gap-1 mt-1">
+                  <p
+                    className="text-xs font-semibold"
+                    style={{ color: Colors.textSecondary }}
+                  >
+                    ✅ Valid Categories:
+                  </p>
+                  <p
+                    className="text-xs leading-relaxed"
+                    style={{ color: Colors.textMuted }}
+                  >
+                    {CATEGORIES.map((c) => c.id).join(", ")}
+                  </p>
+                </div>
               </div>
               <button
                 onClick={downloadTemplate}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-semibold whitespace-nowrap flex-shrink-0"
+                className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-semibold whitespace-nowrap flex-shrink-0 self-start sm:self-center"
                 style={{
                   background: `linear-gradient(135deg, ${Colors.gradientStart}, ${Colors.gradientEnd})`,
                   color: Colors.white,
@@ -1179,13 +1184,8 @@ export default function AddProducts() {
                     >
                       Row {fr.row}:{" "}
                       {typeof fr.errors === "object"
-                        ? Object.entries(fr.errors)
-                            .map(
-                              ([field, msgs]) =>
-                                `${field}: ${(msgs as string[]).join(", ")}`,
-                            )
-                            .join(" | ")
-                        : JSON.stringify(fr.errors)}
+                        ? JSON.stringify(fr.errors)
+                        : fr.errors}
                     </p>
                   ))}
                 </div>
@@ -1234,11 +1234,6 @@ export default function AddProducts() {
                   </div>
                   <button
                     onClick={() => {
-                      bulkRows.forEach((r) =>
-                        r.images.forEach((img) =>
-                          URL.revokeObjectURL(img.preview),
-                        ),
-                      );
                       setBulkRows([]);
                       setBulkUploadResult(null);
                       bulkFileRef.current = null;
@@ -1250,9 +1245,8 @@ export default function AddProducts() {
                   </button>
                 </div>
 
-                {/* Table */}
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[800px]">
+                  <table className="w-full min-w-[900px]">
                     <thead>
                       <tr style={{ background: Colors.surfaceAlt }}>
                         {[
@@ -1277,242 +1271,103 @@ export default function AddProducts() {
                     </thead>
                     <tbody>
                       {bulkRows.map((row) => (
-                        <>
-                          <tr
-                            key={row.id}
-                            style={{
-                              borderTop: `1px solid ${Colors.divider}`,
-                              background:
-                                row.status === "error"
-                                  ? "#FFF5F6"
-                                  : "transparent",
-                            }}
-                          >
-                            <td className="px-4 py-3">
-                              {row.status === "valid" ? (
-                                <CheckCircle2
+                        <tr
+                          key={row.id}
+                          style={{
+                            borderTop: `1px solid ${Colors.divider}`,
+                            background:
+                              row.status === "error"
+                                ? "#FFF5F6"
+                                : "transparent",
+                          }}
+                        >
+                          <td className="px-4 py-3">
+                            {row.status === "valid" ? (
+                              <CheckCircle2
+                                size={16}
+                                color={Colors.success}
+                                strokeWidth={2.5}
+                              />
+                            ) : (
+                              <div className="flex items-center gap-1">
+                                <AlertCircle
                                   size={16}
-                                  color={Colors.success}
+                                  color={Colors.error}
                                   strokeWidth={2.5}
                                 />
-                              ) : (
-                                <div className="flex items-center gap-1">
-                                  <AlertCircle
-                                    size={16}
-                                    color={Colors.error}
-                                    strokeWidth={2.5}
-                                  />
-                                  <span
-                                    className="text-xs"
-                                    style={{ color: Colors.error }}
-                                  >
-                                    {row.error}
-                                  </span>
-                                </div>
-                              )}
-                            </td>
-                            <td
-                              className="px-4 py-3 text-sm font-medium max-w-[180px] truncate"
-                              style={{ color: Colors.textPrimary }}
-                            >
-                              {row.name || "—"}
-                            </td>
-                            <td
-                              className="px-4 py-3 text-sm max-w-[120px] truncate"
-                              style={{ color: Colors.textSecondary }}
-                            >
-                              {row.brand || "—"}
-                            </td>
-                            <td
-                              className="px-4 py-3 text-sm"
-                              style={{ color: Colors.textSecondary }}
-                            >
-                              {row.category || "—"}
-                            </td>
-                            <td
-                              className="px-4 py-3 text-sm font-semibold"
-                              style={{ color: Colors.primary }}
-                            >
-                              {row.price ? `₹${row.price}` : "—"}
-                            </td>
-                            <td
-                              className="px-4 py-3 text-sm"
-                              style={{ color: Colors.textSecondary }}
-                            >
-                              {row.stock || "—"}
-                            </td>
-                            <td className="px-4 py-3">
-                              <button
-                                onClick={() => toggleRowExpand(row.id)}
-                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all"
+                                <span
+                                  className="text-xs"
+                                  style={{ color: Colors.error }}
+                                >
+                                  {row.error}
+                                </span>
+                              </div>
+                            )}
+                          </td>
+                          <td
+                            className="px-4 py-3 text-sm font-medium max-w-[180px] truncate"
+                            style={{ color: Colors.textPrimary }}
+                          >
+                            {row.name || "—"}
+                          </td>
+                          <td
+                            className="px-4 py-3 text-sm max-w-[120px] truncate"
+                            style={{ color: Colors.textSecondary }}
+                          >
+                            {row.brand || "—"}
+                          </td>
+                          <td
+                            className="px-4 py-3 text-sm"
+                            style={{ color: Colors.textSecondary }}
+                          >
+                            {row.category || "—"}
+                          </td>
+                          <td
+                            className="px-4 py-3 text-sm font-semibold"
+                            style={{ color: Colors.primary }}
+                          >
+                            {row.price ? `₹${row.price}` : "—"}
+                          </td>
+                          <td
+                            className="px-4 py-3 text-sm"
+                            style={{ color: Colors.textSecondary }}
+                          >
+                            {row.stock || "—"}
+                          </td>
+                          <td className="px-4 py-3">
+                            {row.image_urls ? (
+                              <span
+                                className="text-xs px-2 py-0.5 rounded-lg"
                                 style={{
-                                  background:
-                                    row.images.length > 0
-                                      ? Colors.primaryLight
-                                      : Colors.surfaceAlt,
-                                  color:
-                                    row.images.length > 0
-                                      ? Colors.primary
-                                      : Colors.textSecondary,
-                                  border: `1px solid ${Colors.border}`,
+                                  background: Colors.primaryLight,
+                                  color: Colors.primary,
                                 }}
                               >
-                                <ImagePlus size={14} strokeWidth={2} />
-                                {row.images.length > 0
-                                  ? `${row.images.length} images`
-                                  : "Add Images"}
-                                <ChevronDown
-                                  size={12}
-                                  style={{
-                                    transform: row.expanded
-                                      ? "rotate(180deg)"
-                                      : "none",
-                                    transition: "transform 0.2s",
-                                  }}
-                                />
-                              </button>
-                            </td>
-                            <td className="px-4 py-3">
-                              <button
-                                onClick={() => removeRow(row.id)}
-                                className="p-1.5 rounded-lg"
+                                {
+                                  row.image_urls.split(",").filter(Boolean)
+                                    .length
+                                }{" "}
+                                images
+                              </span>
+                            ) : (
+                              <span
+                                className="text-xs"
                                 style={{ color: Colors.textMuted }}
                               >
-                                <Trash2 size={15} strokeWidth={2} />
-                              </button>
-                            </td>
-                          </tr>
-
-                          {/* Expanded Image Section */}
-                          {row.expanded && row.status === "valid" && (
-                            <tr
-                              key={`${row.id}-images`}
-                              style={{
-                                background: Colors.surfaceAlt,
-                                borderTop: `1px solid ${Colors.divider}`,
-                              }}
+                                —
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3">
+                            <button
+                              onClick={() => removeRow(row.id)}
+                              className="p-1.5 rounded-lg"
+                              style={{ color: Colors.textMuted }}
                             >
-                              <td colSpan={8} className="px-4 py-4">
-                                <div className="flex flex-col gap-3">
-                                  <div className="flex items-center justify-between">
-                                    <p
-                                      className="text-xs font-semibold"
-                                      style={{ color: Colors.textSecondary }}
-                                    >
-                                      Images for:{" "}
-                                      <span
-                                        style={{ color: Colors.textPrimary }}
-                                      >
-                                        {row.name}
-                                      </span>{" "}
-                                      ({row.images.length}/8)
-                                    </p>
-                                    {row.images.length < 8 && (
-                                      <label
-                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold cursor-pointer"
-                                        style={{
-                                          background: Colors.primaryLight,
-                                          color: Colors.primary,
-                                          border: `1px solid ${Colors.accentLight}`,
-                                        }}
-                                      >
-                                        <Plus size={14} strokeWidth={2.5} /> Add
-                                        Images
-                                        <input
-                                          type="file"
-                                          accept="image/jpeg,image/png,image/webp"
-                                          multiple
-                                          className="hidden"
-                                          onChange={(e) => {
-                                            if (e.target.files) {
-                                              addImagesToRow(
-                                                row.id,
-                                                e.target.files,
-                                              );
-                                              e.target.value = "";
-                                            }
-                                          }}
-                                        />
-                                      </label>
-                                    )}
-                                  </div>
-
-                                  {row.images.length > 0 ? (
-                                    <div className="grid grid-cols-6 gap-3">
-                                      {row.images.map((img, imgIndex) => (
-                                        <div
-                                          key={imgIndex}
-                                          className="relative group"
-                                        >
-                                          <div
-                                            className="relative rounded-xl overflow-hidden aspect-square cursor-pointer"
-                                            style={{
-                                              border: `2px solid ${img.isPrimary ? Colors.primary : Colors.border}`,
-                                            }}
-                                            onClick={() =>
-                                              setBulkImagePrimary(
-                                                row.id,
-                                                imgIndex,
-                                              )
-                                            }
-                                          >
-                                            <img
-                                              src={img.preview}
-                                              alt={`${row.name} ${imgIndex + 1}`}
-                                              className="w-full h-full object-cover"
-                                            />
-                                            {img.isPrimary && (
-                                              <span
-                                                className="absolute top-1 left-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold"
-                                                style={{
-                                                  background: Colors.primary,
-                                                  color: Colors.white,
-                                                }}
-                                              >
-                                                Primary
-                                              </span>
-                                            )}
-                                            <div className="absolute inset-0 bg-black/10 bg-opacity-0 group-hover:bg-opacity-30 transition-all duration-200 flex items-center justify-center">
-                                              <span className="text-white text-[10px] font-semibold opacity-0 group-hover:opacity-100">
-                                                Set Primary
-                                              </span>
-                                            </div>
-                                          </div>
-                                          <button
-                                            onClick={() =>
-                                              removeBulkImage(row.id, imgIndex)
-                                            }
-                                            className="absolute -top-2 -right-2 w-5 h-5 rounded-full flex items-center justify-center z-10"
-                                            style={{
-                                              background: Colors.error,
-                                              color: Colors.white,
-                                            }}
-                                          >
-                                            <X size={10} strokeWidth={3} />
-                                          </button>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  ) : (
-                                    <div className="text-center py-4">
-                                      <ImageIcon
-                                        size={24}
-                                        color={Colors.border}
-                                        strokeWidth={1.5}
-                                      />
-                                      <p
-                                        className="text-xs mt-1"
-                                        style={{ color: Colors.textMuted }}
-                                      >
-                                        No images added yet
-                                      </p>
-                                    </div>
-                                  )}
-                                </div>
-                              </td>
-                            </tr>
-                          )}
-                        </>
+                              <Trash2 size={15} strokeWidth={2} />
+                            </button>
+                          </td>
+                        </tr>
                       ))}
                     </tbody>
                   </table>
