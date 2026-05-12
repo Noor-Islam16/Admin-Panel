@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import {
   Settings,
   ShieldCheck,
-  Trash2,
+  // Trash2,
   CheckCircle2,
   AlertTriangle,
   X,
@@ -12,7 +12,7 @@ import {
   Lock,
   Users,
   Save,
-  RefreshCw,
+  // RefreshCw,
   Bell,
   Send,
   Smartphone,
@@ -252,8 +252,8 @@ export default function SettingsPage() {
   const [showOldPass, setShowOldPass] = useState(false);
   const [showNewPass, setShowNewPass] = useState(false);
   const [showConfirmPass, setShowConfirmPass] = useState(false);
-  const [showDangerConfirm, setShowDangerConfirm] = useState(false);
-  const [dangerInput, setDangerInput] = useState("");
+  // const [showDangerConfirm, setShowDangerConfirm] = useState(false);
+  // const [dangerInput, setDangerInput] = useState("");
   const [showEmailPass, setShowEmailPass] = useState(false);
 
   // ── Admin Credentials ──────────────────────────────────────────────────────
@@ -529,15 +529,15 @@ export default function SettingsPage() {
     }
   };
 
-  const handleDangerReset = () => {
-    if (dangerInput !== "RESET") {
-      showToast("error", 'Type "RESET" to confirm.');
-      return;
-    }
-    showToast("success", "All data has been reset to defaults.");
-    setShowDangerConfirm(false);
-    setDangerInput("");
-  };
+  // const handleDangerReset = () => {
+  //   if (dangerInput !== "RESET") {
+  //     showToast("error", 'Type "RESET" to confirm.');
+  //     return;
+  //   }
+  //   showToast("success", "All data has been reset to defaults.");
+  //   setShowDangerConfirm(false);
+  //   setDangerInput("");
+  // };
 
   return (
     <>
@@ -1423,7 +1423,7 @@ export default function SettingsPage() {
         {/* ══════════════════════════════════════
              DANGER ZONE
         ══════════════════════════════════════ */}
-        <div
+        {/* <div
           className="rounded-3xl overflow-hidden"
           style={{
             background: Colors.surface,
@@ -1514,7 +1514,6 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {/* ── Danger Confirm Modal ── */}
         {showDangerConfirm && (
           <div
             className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -1602,7 +1601,7 @@ export default function SettingsPage() {
               </div>
             </div>
           </div>
-        )}
+        )} */}
       </div>
 
       <style>{`

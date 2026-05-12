@@ -17,6 +17,7 @@ import {
   Smartphone,
   Boxes,
   Plus,
+  Cloud,
 } from "lucide-react";
 import Colors from "../constants/colors";
 import { CATEGORIES } from "../constants/products";
@@ -505,7 +506,7 @@ export default function AddProducts() {
       "stock",
       "min_order_qty",
       "max_order_qty",
-      "description", // ✅ NEW
+      "description",
       "image_1",
       "image_2",
       "image_3",
@@ -524,9 +525,10 @@ export default function AddProducts() {
         "999",
         "100",
         "2",
-        "10", // ✅ Added max_order_qty
+        "10",
         "Fast charging USB-C cable with 60W PD support",
-        "https://res.cloudinary.com/your-cloud/image/upload/v123/product1.jpg",
+        // Example with Google Drive URL
+        "https://drive.google.com/file/d/1EXAMPLE_DRIVE_ID1/view?usp=drive_link",
         "https://res.cloudinary.com/your-cloud/image/upload/v123/product1-back.jpg",
         "",
         "",
@@ -543,9 +545,9 @@ export default function AddProducts() {
         "2990",
         "50",
         "1",
-        "5", // ✅ Added max_order_qty
+        "5",
         "True wireless earbuds with ENC",
-        "https://res.cloudinary.com/your-cloud/image/upload/v123/product2.jpg",
+        "https://drive.google.com/file/d/1EXAMPLE_DRIVE_ID2/view?usp=drive_link",
         "",
         "",
         "",
@@ -562,10 +564,11 @@ export default function AddProducts() {
         "1299",
         "200",
         "1",
-        "", // ✅ Empty = no limit
+        "", // Empty = no limit
         "Compact 20W PD fast charger",
-        "https://res.cloudinary.com/your-cloud/image/upload/v123/product3.jpg",
-        "",
+        // Mix of Google Drive and Cloudinary
+        "https://drive.google.com/file/d/1EXAMPLE_DRIVE_ID3/view?usp=drive_link",
+        "https://res.cloudinary.com/your-cloud/image/upload/v123/product3-back.jpg",
         "",
         "",
         "",
@@ -1100,24 +1103,82 @@ export default function AddProducts() {
                 >
                   Download CSV template → fill products with{" "}
                   <strong>
-                    Cloudinary image URLs in separate columns (image_1 to
-                    image_8)
+                    image URLs in separate columns (image_1 to image_8)
                   </strong>{" "}
                   → upload.
                   <br />
-                  Use Cloudinary to get image URLs:{" "}
+                  <strong>✅ Supported image sources:</strong>
+                </p>
+
+                {/* Google Drive URLs section */}
+                <div
+                  className="rounded-xl p-3 mt-1"
+                  style={{ background: Colors.surface }}
+                >
+                  <p
+                    className="text-xs font-semibold flex items-center gap-1"
+                    style={{ color: Colors.primary }}
+                  >
+                    <Cloud size={14} /> Google Drive Images
+                  </p>
+                  <p
+                    className="text-xs mt-1"
+                    style={{ color: Colors.textSecondary }}
+                  >
+                    Share your image from Google Drive with{" "}
+                    <strong style={{ color: Colors.accent }}>
+                      "Anyone with the link"
+                    </strong>{" "}
+                    access, then use the share link:
+                  </p>
                   <code
+                    className="block mt-1 p-2 rounded-lg text-xs"
                     style={{
-                      background: Colors.surface,
-                      padding: "2px 6px",
-                      borderRadius: 4,
-                      fontSize: "11px",
+                      background: Colors.surfaceAlt,
+                      color: Colors.textPrimary,
                       wordBreak: "break-all",
+                      fontSize: "11px",
+                    }}
+                  >
+                    https://drive.google.com/file/d/1wun_oCHqlzNhSsZeCPW_aEV47J7t3jW6/view?usp=drive_link
+                  </code>
+                  <p
+                    className="text-xs mt-1"
+                    style={{ color: Colors.textMuted }}
+                  >
+                    The system will automatically convert it to a direct image
+                    URL.
+                  </p>
+                </div>
+
+                {/* Cloudinary URLs section - keep this */}
+                {/* <div
+                  className="rounded-xl p-3"
+                  style={{ background: Colors.surface }}
+                >
+                  <p
+                    className="text-xs font-semibold flex items-center gap-1"
+                    style={{ color: Colors.primary }}
+                  >
+                    <ImageIcon size={14} /> Cloudinary URLs (also supported)
+                  </p>
+                  <code
+                    className="block mt-1 p-2 rounded-lg text-xs"
+                    style={{
+                      background: Colors.surfaceAlt,
+                      color: Colors.textPrimary,
+                      wordBreak: "break-all",
+                      fontSize: "11px",
                     }}
                   >
                     https://res.cloudinary.com/your-cloud/image/upload/v123/product.jpg
                   </code>
-                  <br />
+                </div> */}
+
+                <p
+                  className="text-xs mt-1"
+                  style={{ color: Colors.textSecondary }}
+                >
                   Required: <strong>name</strong>, <strong>category</strong>,{" "}
                   <strong>price</strong>, <strong>stock</strong>.
                 </p>
