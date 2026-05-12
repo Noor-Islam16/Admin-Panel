@@ -31,6 +31,7 @@ interface ProductForm {
   originalPrice: string;
   stock: string;
   minOrderQty: string;
+  maxOrderQty: string; // ✅ NEW
   description: string;
 }
 
@@ -44,6 +45,7 @@ interface BulkRow {
   description: string;
   image_urls: string;
   min_order_qty: string;
+  max_order_qty: string; // ✅ NEW
   stock: string;
   status: "valid" | "error";
   error?: string;
@@ -57,6 +59,7 @@ const EMPTY_FORM: ProductForm = {
   originalPrice: "",
   stock: "",
   minOrderQty: "1",
+  maxOrderQty: "", // ✅ NEW - empty means no limit
   description: "",
 };
 
@@ -267,6 +270,7 @@ export default function AddProducts() {
       fd.append("sellingPrice", form.price);
       fd.append("stockQuantity", form.stock);
       fd.append("minOrderQuantity", form.minOrderQty);
+      if (form.maxOrderQty) fd.append("maxOrderQuantity", form.maxOrderQty); // ✅ NEW
       if (form.brand.trim()) fd.append("brand", form.brand.trim());
       if (form.originalPrice) fd.append("originalPrice", form.originalPrice);
       if (form.description.trim())
@@ -354,17 +358,22 @@ export default function AddProducts() {
           .replace(/^"|"$/g, "");
       });
 
-      // Normalize numeric fields
-      ["price", "original_price", "stock", "min_order_qty"].forEach((f) => {
+      // Normalize numeric fields — remove thousand separators
+      [
+        "price",
+        "original_price",
+        "stock",
+        "min_order_qty",
+        "max_order_qty",
+      ].forEach((f) => {
         if (obj[f]) obj[f] = obj[f].replace(/,/g, "").replace(/\.0+$/, "");
       });
 
-      // ✅ COLLECT IMAGES FROM image_1 through image_8 columns - NO CONVERSION
+      // ✅ COLLECT IMAGES FROM image_1 through image_8 columns
       const imageUrls: string[] = [];
       for (let j = 1; j <= 8; j++) {
         const url = obj[`image_${j}`];
         if (url && url.trim()) {
-          // Just use the URL as-is (Cloudinary URLs work directly)
           imageUrls.push(url.trim());
         }
       }
@@ -381,6 +390,7 @@ export default function AddProducts() {
 
       const hasError =
         !obj["name"] || !obj["price"] || !obj["stock"] || !obj["category"];
+
       return {
         id: String(i),
         name: obj["name"] ?? "",
@@ -391,6 +401,7 @@ export default function AddProducts() {
         description: obj["description"] ?? "",
         image_urls: imageUrls.join(","),
         min_order_qty: obj["min_order_qty"] ?? "1",
+        max_order_qty: obj["max_order_qty"] ?? "", // ✅ NEW - empty means no limit
         stock: obj["stock"] ?? "",
         status: hasError ? "error" : "valid",
         error: hasError
@@ -493,7 +504,8 @@ export default function AddProducts() {
       "original_price",
       "stock",
       "min_order_qty",
-      "description",
+      "max_order_qty",
+      "description", // ✅ NEW
       "image_1",
       "image_2",
       "image_3",
@@ -512,6 +524,7 @@ export default function AddProducts() {
         "999",
         "100",
         "2",
+        "10", // ✅ Added max_order_qty
         "Fast charging USB-C cable with 60W PD support",
         "https://res.cloudinary.com/your-cloud/image/upload/v123/product1.jpg",
         "https://res.cloudinary.com/your-cloud/image/upload/v123/product1-back.jpg",
@@ -530,6 +543,7 @@ export default function AddProducts() {
         "2990",
         "50",
         "1",
+        "5", // ✅ Added max_order_qty
         "True wireless earbuds with ENC",
         "https://res.cloudinary.com/your-cloud/image/upload/v123/product2.jpg",
         "",
@@ -548,6 +562,7 @@ export default function AddProducts() {
         "1299",
         "200",
         "1",
+        "", // ✅ Empty = no limit
         "Compact 20W PD fast charger",
         "https://res.cloudinary.com/your-cloud/image/upload/v123/product3.jpg",
         "",
@@ -848,6 +863,39 @@ export default function AddProducts() {
                     />
                   </InputWrapper>
                 </div>
+              </div>
+
+              {/* ✅ NEW: Max Order Quantity */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <FieldLabel>Max Order Quantity</FieldLabel>
+                  <InputWrapper focused={focused === "maxOrderQty"}>
+                    <div
+                      className="absolute left-3.5"
+                      style={{
+                        color:
+                          focused === "maxOrderQty"
+                            ? Colors.primary
+                            : Colors.textMuted,
+                      }}
+                    >
+                      <Boxes size={17} strokeWidth={2} />
+                    </div>
+                    <input
+                      className={inputClass}
+                      style={inputStyle}
+                      type="number"
+                      min="1"
+                      placeholder="No limit (optional)"
+                      value={form.maxOrderQty}
+                      onChange={(e) => set("maxOrderQty", e.target.value)}
+                      onFocus={() => setFocused("maxOrderQty")}
+                      onBlur={() => setFocused("")}
+                    />
+                  </InputWrapper>
+                </div>
+                {/* Spacer to keep grid alignment */}
+                <div />
               </div>
 
               <div className="flex flex-col gap-1.5">

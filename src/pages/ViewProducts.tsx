@@ -356,6 +356,8 @@ function EditModal({
       product.originalPrice != null ? String(product.originalPrice) : "",
     stockQuantity: String(product.stockQuantity),
     minOrderQuantity: String(product.minOrderQuantity),
+    maxOrderQuantity:
+      product.maxOrderQuantity != null ? String(product.maxOrderQuantity) : "", // ✅ NEW
     description: product.description ?? "",
   });
   const [focused, setFocused] = useState("");
@@ -488,6 +490,8 @@ function EditModal({
       fd.append("sellingPrice", form.sellingPrice);
       fd.append("stockQuantity", form.stockQuantity);
       fd.append("minOrderQuantity", form.minOrderQuantity);
+      if (form.maxOrderQuantity)
+        fd.append("maxOrderQuantity", form.maxOrderQuantity); // ✅ NEW
       if (form.brand.trim()) fd.append("brand", form.brand.trim());
       if (form.originalPrice) fd.append("originalPrice", form.originalPrice);
       if (form.description.trim())
@@ -859,6 +863,27 @@ function EditModal({
                 />
               </InputBox>
             </div>
+          </div>
+
+          {/* ✅ Max Order Qty */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1.5">
+              <FieldLabel>Max Order Quantity</FieldLabel>
+              <InputBox focused={focused === "maxOrderQty"} icon={Boxes}>
+                <input
+                  className={inputClass}
+                  style={inputStyle}
+                  type="number"
+                  min="1"
+                  placeholder="No limit"
+                  value={form.maxOrderQuantity}
+                  onChange={(e) => set("maxOrderQuantity", e.target.value)}
+                  onFocus={() => setFocused("maxOrderQty")}
+                  onBlur={() => setFocused("")}
+                />
+              </InputBox>
+            </div>
+            <div /> {/* Spacer */}
           </div>
 
           {/* Description */}

@@ -124,6 +124,7 @@ function ProductThumb({
 }
 
 // ── Qty Adjust Cell ───────────────────────────────────────────────────────────
+// ── Qty Adjust Cell ───────────────────────────────────────────────────────────
 function QtyCell({
   product,
   onUpdate,
@@ -247,9 +248,25 @@ function QtyCell({
           style={{ color: Colors.textMuted }}
         />
       </div>
-      <span className="text-xs" style={{ color: Colors.textMuted }}>
-        min {product.minOrderQuantity}
-      </span>
+      {/* ✅ NEW: Min/Max order quantity info */}
+      <div className="flex items-center gap-2">
+        <span className="text-xs" style={{ color: Colors.textMuted }}>
+          min {product.minOrderQuantity}
+        </span>
+        {product.maxOrderQuantity && (
+          <>
+            <span
+              className="text-xs opacity-40"
+              style={{ color: Colors.textMuted }}
+            >
+              ·
+            </span>
+            <span className="text-xs" style={{ color: Colors.textMuted }}>
+              max {product.maxOrderQuantity}
+            </span>
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -332,7 +349,6 @@ export default function ManageStocks() {
             minStockAlert: alertMap[p._id] ?? 10,
           }));
         });
-
         setTotalPages(pagination.totalPages);
         setTotalCount(pagination.total);
         setPage(pg);
