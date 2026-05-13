@@ -305,4 +305,50 @@ export const AdminAPI = {
       method: "PATCH",
       body: JSON.stringify({ oldPassword, newPassword, confirmPassword }),
     }),
+
+  // 👇 UPDATED: Send manual push notification (now uses FCM)
+  sendManualPush: (data: {
+    title: string;
+    body: string;
+    targetType: "all" | "specific" | "pending" | "approved";
+    selectedUsers?: string[];
+    screen?: string;
+  }) =>
+    request<{
+      success: boolean;
+      message: string;
+      data?: { sentCount: number; totalTargets: number };
+    }>("/admin/send-push", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  // 👇 NEW: Test FCM notification to specific user
+  testFCM: (userId: string, title?: string, body?: string) =>
+    request<{ success: boolean; message: string }>("/admin/test-fcm", {
+      method: "POST",
+      body: JSON.stringify({
+        userId,
+        title: title || "Test FCM Notification",
+        body: body || "This is a test notification from Firebase!",
+      }),
+    }),
+
+  // 👇 NEW: Get customer's FCM tokens (for debugging)
+  getCustomerFCMTokens: (customerId: string) =>
+    request<{
+      success: boolean;
+      data: {
+        userId: string;
+        phone: string;
+        name: string;
+        fcmTokens: Array<{
+          platform: string;
+          device: string;
+          lastUsed: string;
+          createdAt: string;
+        }>;
+        totalDevices: number;
+      };
+    }>(`/admin/customers/${customerId}/fcm-tokens`),
 };

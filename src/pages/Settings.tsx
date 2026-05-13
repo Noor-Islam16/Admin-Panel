@@ -1,8 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Settings,
   ShieldCheck,
-  // Trash2,
   CheckCircle2,
   AlertTriangle,
   X,
@@ -12,7 +11,6 @@ import {
   Lock,
   Users,
   Save,
-  // RefreshCw,
   Bell,
   Send,
   Smartphone,
@@ -69,15 +67,16 @@ function SectionCard({
 }) {
   return (
     <div
-      className="rounded-3xl overflow-hidden"
+      className="rounded-3xl"
       style={{
         background: Colors.surface,
         border: `1px solid ${Colors.border}`,
         boxShadow: `0 4px 16px ${Colors.shadow}`,
+        // NOTE: No overflow:hidden here — allows dropdown to escape
       }}
     >
       <div
-        className="flex items-center gap-3 px-6 py-5"
+        className="flex items-center gap-3 px-6 py-5 rounded-t-3xl"
         style={{
           background: `linear-gradient(135deg, ${Colors.gradientStart}08, ${Colors.gradientEnd}12)`,
           borderBottom: `1px solid ${Colors.divider}`,
@@ -252,8 +251,6 @@ export default function SettingsPage() {
   const [showOldPass, setShowOldPass] = useState(false);
   const [showNewPass, setShowNewPass] = useState(false);
   const [showConfirmPass, setShowConfirmPass] = useState(false);
-  // const [showDangerConfirm, setShowDangerConfirm] = useState(false);
-  // const [dangerInput, setDangerInput] = useState("");
   const [showEmailPass, setShowEmailPass] = useState(false);
 
   // ── Admin Credentials ──────────────────────────────────────────────────────
@@ -277,6 +274,8 @@ export default function SettingsPage() {
     screen: "",
   });
   const [showUserDropdown, setShowUserDropdown] = useState(false);
+  const dropdownTriggerRef = useRef<HTMLButtonElement>(null);
+  const dropdownPanelRef = useRef<HTMLDivElement>(null);
   const [customers, setCustomers] = useState<
     Array<{
       _id: string;
@@ -320,15 +319,10 @@ export default function SettingsPage() {
       const data = await res.json();
       if (data.success && data.data?.customers) {
         setCustomers(data.data.customers);
-        console.log(
-          `✅ Loaded ${data.data.customers.length} customers for push`,
-        );
       } else {
-        console.warn("⚠️ Unexpected customers response:", data);
         setCustomers([]);
       }
     } catch (err) {
-      console.error("❌ Failed to fetch customers:", err);
       setCustomers([]);
     } finally {
       setCustomersLoading(false);
@@ -338,6 +332,21 @@ export default function SettingsPage() {
   useEffect(() => {
     fetchCustomers();
   }, []);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!showUserDropdown) return;
+    const handleClick = (e: MouseEvent) => {
+      if (
+        dropdownTriggerRef.current?.contains(e.target as Node) ||
+        dropdownPanelRef.current?.contains(e.target as Node)
+      )
+        return;
+      setShowUserDropdown(false);
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [showUserDropdown]);
 
   // Filter customers based on search
   const filteredCustomers = customers.filter((c) => {
@@ -375,7 +384,6 @@ export default function SettingsPage() {
     }
   };
 
-  // Select all filtered
   const handleSelectAllFiltered = () => {
     const filteredIds = filteredCustomers.map((c) => c._id);
     setPushForm((p) => ({
@@ -384,7 +392,6 @@ export default function SettingsPage() {
     }));
   };
 
-  // Clear only filtered
   const handleClearFiltered = () => {
     const filteredIds = new Set(filteredCustomers.map((c) => c._id));
     setPushForm((p) => ({
@@ -393,13 +400,11 @@ export default function SettingsPage() {
     }));
   };
 
-  // Count selected from filtered list
   const selectedFromFiltered = filteredCustomers.filter((c) =>
     pushForm.selectedUsers.includes(c._id),
   ).length;
 
   // ── Handlers ──────────────────────────────────────────────────────────────
-
   const handleChangeEmail = async () => {
     if (!emailForm.newEmail.trim()) {
       showToast("error", "Please enter a new email address.");
@@ -409,7 +414,6 @@ export default function SettingsPage() {
       showToast("error", "Current password is required to change email.");
       return;
     }
-
     setLoading((p) => ({ ...p, email: true }));
     try {
       const res = await AdminAPI.changeEmail(
@@ -447,7 +451,6 @@ export default function SettingsPage() {
       showToast("error", "Password must be at least 8 characters.");
       return;
     }
-
     setLoading((p) => ({ ...p, password: true }));
     try {
       await AdminAPI.changePassword(
@@ -471,13 +474,11 @@ export default function SettingsPage() {
     }
   };
 
-  // ── Send Manual Push Notification ──────────────────────────────────────────
   const handleSendPush = async () => {
     if (!pushForm.title.trim() || !pushForm.body.trim()) {
       showToast("error", "Title and message body are required.");
       return;
     }
-
     if (
       pushForm.targetType === "specific" &&
       pushForm.selectedUsers.length === 0
@@ -485,31 +486,19 @@ export default function SettingsPage() {
       showToast("error", "Please select at least one user.");
       return;
     }
-
     setPushSending(true);
     try {
-      const token =
-        localStorage.getItem("token") ?? localStorage.getItem("adminToken");
-      const res = await fetch(`${API_BASE}/admin/send-push`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          title: pushForm.title.trim(),
-          body: pushForm.body.trim(),
-          targetType: pushForm.targetType,
-          selectedUsers: pushForm.selectedUsers,
-          screen: pushForm.screen || undefined,
-        }),
+      const res = await AdminAPI.sendManualPush({
+        title: pushForm.title.trim(),
+        body: pushForm.body.trim(),
+        targetType: pushForm.targetType,
+        selectedUsers: pushForm.selectedUsers,
+        screen: pushForm.screen || undefined,
       });
-
-      const data = await res.json();
-      if (data.success) {
+      if (res.success) {
         showToast(
           "success",
-          `Notification sent to ${data.data.sentCount} user(s)!`,
+          `FCM notification sent to ${res.data?.sentCount || 0} user(s)!`,
         );
         setPushForm({
           title: "",
@@ -520,7 +509,7 @@ export default function SettingsPage() {
         });
         setPushPreview(false);
       } else {
-        showToast("error", data.message || "Failed to send notification.");
+        showToast("error", res.message || "Failed to send notification.");
       }
     } catch (err: any) {
       showToast("error", err.message || "Failed to send notification.");
@@ -528,16 +517,6 @@ export default function SettingsPage() {
       setPushSending(false);
     }
   };
-
-  // const handleDangerReset = () => {
-  //   if (dangerInput !== "RESET") {
-  //     showToast("error", 'Type "RESET" to confirm.');
-  //     return;
-  //   }
-  //   showToast("success", "All data has been reset to defaults.");
-  //   setShowDangerConfirm(false);
-  //   setDangerInput("");
-  // };
 
   return (
     <>
@@ -686,7 +665,8 @@ export default function SettingsPage() {
                         selectedUsers:
                           value === "specific" ? p.selectedUsers : [],
                       }));
-                      setShowUserDropdown(value === "specific");
+                      if (value === "specific") setShowUserDropdown(true);
+                      else setShowUserDropdown(false);
                     }}
                     className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-semibold transition-all duration-150"
                     style={{
@@ -711,366 +691,375 @@ export default function SettingsPage() {
               </p>
             </FieldRow>
 
-            {/* Specific User Selection */}
+            {/* ── Specific User Selection ── */}
             {pushForm.targetType === "specific" && (
               <FieldRow label="Select Users">
-                <div className="relative">
-                  <button
-                    onClick={() => setShowUserDropdown(!showUserDropdown)}
-                    className="w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm transition-all duration-200"
+                {/* Trigger button */}
+                <button
+                  ref={dropdownTriggerRef}
+                  onClick={() => setShowUserDropdown(!showUserDropdown)}
+                  className="w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm transition-all duration-200"
+                  style={{
+                    background: showUserDropdown
+                      ? Colors.primaryLight
+                      : Colors.surfaceAlt,
+                    border: `1.5px solid ${showUserDropdown ? Colors.borderFocus : Colors.border}`,
+                    color: Colors.textPrimary,
+                  }}
+                >
+                  <div className="flex items-center gap-2">
+                    <Users size={16} style={{ color: Colors.textMuted }} />
+                    <span
+                      style={{
+                        color:
+                          pushForm.selectedUsers.length > 0
+                            ? Colors.textPrimary
+                            : Colors.textMuted,
+                      }}
+                    >
+                      {pushForm.selectedUsers.length > 0
+                        ? `${pushForm.selectedUsers.length} user(s) selected`
+                        : "Click to select users..."}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {customersLoading && (
+                      <svg
+                        className="animate-spin"
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                      >
+                        <circle
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke={Colors.border}
+                          strokeWidth="3"
+                        />
+                        <path
+                          d="M12 2a10 10 0 0 1 10 10"
+                          stroke={Colors.primary}
+                          strokeWidth="3"
+                          strokeLinecap="round"
+                        />
+                      </svg>
+                    )}
+                    <ChevronDown
+                      size={16}
+                      style={{
+                        color: Colors.textMuted,
+                        transform: showUserDropdown ? "rotate(180deg)" : "none",
+                        transition: "transform 0.2s",
+                      }}
+                    />
+                  </div>
+                </button>
+
+                {/* Selected chips summary */}
+                {pushForm.selectedUsers.length > 0 && (
+                  <div className="flex items-center justify-between mt-1 px-1">
+                    <p
+                      className="text-xs font-medium"
+                      style={{ color: Colors.primary }}
+                    >
+                      {pushForm.selectedUsers.length} user(s) selected
+                    </p>
+                    <button
+                      onClick={() =>
+                        setPushForm((p) => ({ ...p, selectedUsers: [] }))
+                      }
+                      className="text-xs font-semibold"
+                      style={{ color: Colors.error }}
+                    >
+                      Clear All
+                    </button>
+                  </div>
+                )}
+
+                {/* Dropdown panel — renders inline (not absolute) to avoid clipping */}
+                {showUserDropdown && (
+                  <div
+                    ref={dropdownPanelRef}
+                    className="mt-1 rounded-2xl overflow-hidden"
                     style={{
-                      background: showUserDropdown
-                        ? Colors.primaryLight
-                        : Colors.surfaceAlt,
-                      border: `1.5px solid ${showUserDropdown ? Colors.borderFocus : Colors.border}`,
-                      color: Colors.textPrimary,
+                      background: Colors.surface,
+                      border: `1.5px solid ${Colors.borderFocus}`,
+                      boxShadow: `0 8px 32px ${Colors.shadow}`,
                     }}
                   >
-                    <div className="flex items-center gap-2">
-                      <Users size={16} style={{ color: Colors.textMuted }} />
-                      <span>
-                        {pushForm.selectedUsers.length > 0
-                          ? `${pushForm.selectedUsers.length} user(s) selected`
-                          : "Click to select users..."}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {customersLoading && (
-                        <svg
-                          className="animate-spin"
-                          width="14"
-                          height="14"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                        >
-                          <circle
-                            cx="12"
-                            cy="12"
-                            r="10"
-                            stroke={Colors.border}
-                            strokeWidth="3"
-                          />
-                          <path
-                            d="M12 2a10 10 0 0 1 10 10"
-                            stroke={Colors.primary}
-                            strokeWidth="3"
-                            strokeLinecap="round"
-                          />
-                        </svg>
-                      )}
-                      <ChevronDown
-                        size={16}
-                        style={{
-                          color: Colors.textMuted,
-                          transform: showUserDropdown
-                            ? "rotate(180deg)"
-                            : "none",
-                          transition: "transform 0.2s",
-                        }}
-                      />
-                    </div>
-                  </button>
-
-                  {showUserDropdown && (
-                    <>
-                      <div
-                        className="fixed inset-0 z-10"
-                        onClick={() => setShowUserDropdown(false)}
-                      />
-                      <div
-                        className="absolute z-20 mt-1 w-full rounded-2xl shadow-xl overflow-hidden"
-                        style={{
-                          background: Colors.surface,
-                          border: `1px solid ${Colors.border}`,
-                        }}
-                      >
-                        {/* Search */}
-                        <div
-                          className="p-3"
+                    {/* Search bar */}
+                    <div
+                      className="p-3"
+                      style={{ borderBottom: `1px solid ${Colors.divider}` }}
+                    >
+                      <div className="relative flex items-center">
+                        <Search
+                          size={14}
+                          className="absolute left-3 pointer-events-none"
+                          style={{ color: Colors.textMuted }}
+                        />
+                        <input
+                          type="text"
+                          placeholder="Search by name or phone..."
+                          value={customerSearch}
+                          onChange={(e) => setCustomerSearch(e.target.value)}
+                          className="w-full pl-9 pr-8 py-2.5 rounded-xl text-sm outline-none"
                           style={{
-                            borderBottom: `1px solid ${Colors.divider}`,
+                            background: Colors.surfaceAlt,
+                            border: `1px solid ${Colors.border}`,
+                            color: Colors.textPrimary,
                           }}
-                        >
-                          <div className="relative">
-                            <Search
-                              size={14}
-                              className="absolute left-3 top-1/2 -translate-y-1/2"
-                              style={{ color: Colors.textMuted }}
-                            />
-                            <input
-                              type="text"
-                              placeholder="Search by name or phone number..."
-                              value={customerSearch}
-                              onChange={(e) =>
-                                setCustomerSearch(e.target.value)
-                              }
-                              className="w-full pl-9 pr-8 py-2.5 rounded-xl text-sm outline-none"
-                              style={{
-                                background: Colors.surfaceAlt,
-                                border: `1px solid ${Colors.border}`,
-                                color: Colors.textPrimary,
-                              }}
-                              autoFocus
-                            />
-                            {customerSearch && (
-                              <button
-                                onClick={() => setCustomerSearch("")}
-                                className="absolute right-2 top-1/2 -translate-y-1/2"
-                                style={{ color: Colors.textMuted }}
-                              >
-                                <X size={14} />
-                              </button>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Stats bar */}
-                        <div
-                          className="flex items-center justify-between px-4 py-2"
-                          style={{ background: Colors.surfaceAlt }}
-                        >
-                          <p
-                            className="text-xs"
+                          autoFocus
+                        />
+                        {customerSearch && (
+                          <button
+                            onClick={() => setCustomerSearch("")}
+                            className="absolute right-2.5"
                             style={{ color: Colors.textMuted }}
                           >
-                            {filteredCustomers.length} user(s) found
-                            {selectedFromFiltered > 0 &&
-                              ` · ${selectedFromFiltered} selected`}
-                          </p>
-                          <div className="flex gap-2">
-                            <button
-                              onClick={handleSelectAllFiltered}
-                              className="text-xs font-semibold px-2 py-1 rounded-lg"
-                              style={{ color: Colors.primary }}
-                            >
-                              Select All
-                            </button>
-                            <button
-                              onClick={handleClearFiltered}
-                              className="text-xs font-semibold px-2 py-1 rounded-lg"
-                              style={{ color: Colors.error }}
-                            >
-                              Clear
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* User List */}
-                        <div className="overflow-y-auto max-h-52">
-                          {customersLoading ? (
-                            <div className="flex items-center justify-center py-8 gap-2">
-                              <svg
-                                className="animate-spin"
-                                width="20"
-                                height="20"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                              >
-                                <circle
-                                  cx="12"
-                                  cy="12"
-                                  r="10"
-                                  stroke={Colors.border}
-                                  strokeWidth="3"
-                                />
-                                <path
-                                  d="M12 2a10 10 0 0 1 10 10"
-                                  stroke={Colors.primary}
-                                  strokeWidth="3"
-                                  strokeLinecap="round"
-                                />
-                              </svg>
-                              <span
-                                className="text-sm"
-                                style={{ color: Colors.textMuted }}
-                              >
-                                Loading customers...
-                              </span>
-                            </div>
-                          ) : filteredCustomers.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center py-8 gap-2">
-                              <Users
-                                size={24}
-                                style={{ color: Colors.border }}
-                              />
-                              <p
-                                className="text-sm"
-                                style={{ color: Colors.textMuted }}
-                              >
-                                {customerSearch
-                                  ? "No users match your search"
-                                  : "No customers found"}
-                              </p>
-                              {customerSearch && (
-                                <button
-                                  onClick={() => setCustomerSearch("")}
-                                  className="text-xs font-semibold px-3 py-1 rounded-lg"
-                                  style={{
-                                    color: Colors.primary,
-                                    background: Colors.primaryLight,
-                                  }}
-                                >
-                                  Clear Search
-                                </button>
-                              )}
-                            </div>
-                          ) : (
-                            filteredCustomers.map((customer) => {
-                              const isSelected =
-                                pushForm.selectedUsers.includes(customer._id);
-                              const approvalBadge =
-                                customer.approvalStatus === "approved" ||
-                                customer.approvalStatus === "auto"
-                                  ? {
-                                      color: "#059669",
-                                      bg: "#D1FAE5",
-                                      label: "Approved",
-                                    }
-                                  : customer.approvalStatus === "rejected"
-                                    ? {
-                                        color: "#DC2626",
-                                        bg: "#FEE2E2",
-                                        label: "Rejected",
-                                      }
-                                    : {
-                                        color: "#D97706",
-                                        bg: "#FEF3C7",
-                                        label: "Pending",
-                                      };
-
-                              return (
-                                <label
-                                  key={customer._id}
-                                  className="flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors"
-                                  style={{
-                                    background: isSelected
-                                      ? Colors.primaryLight
-                                      : "transparent",
-                                    borderBottom: `1px solid ${Colors.divider}`,
-                                  }}
-                                  onMouseEnter={(e) => {
-                                    if (!isSelected)
-                                      (
-                                        e.currentTarget as HTMLElement
-                                      ).style.background = Colors.surfaceAlt;
-                                  }}
-                                  onMouseLeave={(e) => {
-                                    if (!isSelected)
-                                      (
-                                        e.currentTarget as HTMLElement
-                                      ).style.background = "transparent";
-                                  }}
-                                >
-                                  <input
-                                    type="checkbox"
-                                    checked={isSelected}
-                                    onChange={(e) => {
-                                      if (e.target.checked) {
-                                        setPushForm((p) => ({
-                                          ...p,
-                                          selectedUsers: [
-                                            ...p.selectedUsers,
-                                            customer._id,
-                                          ],
-                                        }));
-                                      } else {
-                                        setPushForm((p) => ({
-                                          ...p,
-                                          selectedUsers: p.selectedUsers.filter(
-                                            (id) => id !== customer._id,
-                                          ),
-                                        }));
-                                      }
-                                    }}
-                                    className="w-4 h-4 rounded accent-[#00A884] flex-shrink-0"
-                                  />
-                                  <div
-                                    className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0"
-                                    style={{
-                                      background: `linear-gradient(135deg, ${Colors.gradientStart}, ${Colors.gradientEnd})`,
-                                    }}
-                                  >
-                                    {(customer.profile?.contactName || "U")
-                                      .charAt(0)
-                                      .toUpperCase()}
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                    <p
-                                      className="text-sm font-medium truncate"
-                                      style={{ color: Colors.textPrimary }}
-                                    >
-                                      {customer.profile?.contactName ||
-                                        `User ${customer.phone.slice(-4)}`}
-                                    </p>
-                                    <p
-                                      className="text-xs"
-                                      style={{ color: Colors.textMuted }}
-                                    >
-                                      +91 {customer.phone}
-                                    </p>
-                                  </div>
-                                  <span
-                                    className="text-xs px-2 py-0.5 rounded-lg font-medium flex-shrink-0"
-                                    style={{
-                                      background: approvalBadge.bg,
-                                      color: approvalBadge.color,
-                                    }}
-                                  >
-                                    {approvalBadge.label}
-                                  </span>
-                                  <div
-                                    className="w-2 h-2 rounded-full flex-shrink-0"
-                                    style={{
-                                      background: customer.isActive
-                                        ? Colors.success
-                                        : Colors.error,
-                                    }}
-                                    title={
-                                      customer.isActive ? "Active" : "Inactive"
-                                    }
-                                  />
-                                </label>
-                              );
-                            })
-                          )}
-                        </div>
-
-                        {/* Footer */}
-                        {pushForm.selectedUsers.length > 0 && (
-                          <div
-                            className="flex items-center justify-between px-4 py-2.5"
-                            style={{
-                              borderTop: `1px solid ${Colors.divider}`,
-                              background: Colors.primaryLight,
-                            }}
-                          >
-                            <p
-                              className="text-xs font-semibold"
-                              style={{ color: Colors.primary }}
-                            >
-                              {pushForm.selectedUsers.length} user(s) selected
-                            </p>
-                            <button
-                              onClick={() =>
-                                setPushForm((p) => ({
-                                  ...p,
-                                  selectedUsers: [],
-                                }))
-                              }
-                              className="text-xs font-semibold px-3 py-1 rounded-lg"
-                              style={{
-                                color: Colors.error,
-                                background: "#FFF0F3",
-                              }}
-                            >
-                              Clear All
-                            </button>
-                          </div>
+                            <X size={14} />
+                          </button>
                         )}
                       </div>
-                    </>
-                  )}
-                </div>
+                    </div>
+
+                    {/* Stats + bulk actions bar */}
+                    <div
+                      className="flex items-center justify-between px-4 py-2"
+                      style={{
+                        background: Colors.surfaceAlt,
+                        borderBottom: `1px solid ${Colors.divider}`,
+                      }}
+                    >
+                      <p
+                        className="text-xs"
+                        style={{ color: Colors.textMuted }}
+                      >
+                        {filteredCustomers.length} found
+                        {selectedFromFiltered > 0 &&
+                          ` · ${selectedFromFiltered} selected`}
+                      </p>
+                      <div className="flex gap-3">
+                        <button
+                          onClick={handleSelectAllFiltered}
+                          className="text-xs font-semibold px-2.5 py-1 rounded-lg"
+                          style={{
+                            color: Colors.primary,
+                            background: Colors.primaryLight,
+                            border: `1px solid ${Colors.accentLight}`,
+                          }}
+                        >
+                          Select All
+                        </button>
+                        <button
+                          onClick={handleClearFiltered}
+                          className="text-xs font-semibold px-2.5 py-1 rounded-lg"
+                          style={{
+                            color: Colors.error,
+                            background: "#FFF0F3",
+                            border: `1px solid #FFD0DA`,
+                          }}
+                        >
+                          Clear
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* User list */}
+                    <div
+                      className="overflow-y-auto"
+                      style={{ maxHeight: "220px" }}
+                    >
+                      {customersLoading ? (
+                        <div className="flex items-center justify-center gap-2 py-8">
+                          <svg
+                            className="animate-spin"
+                            width="20"
+                            height="20"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                          >
+                            <circle
+                              cx="12"
+                              cy="12"
+                              r="10"
+                              stroke={Colors.border}
+                              strokeWidth="3"
+                            />
+                            <path
+                              d="M12 2a10 10 0 0 1 10 10"
+                              stroke={Colors.primary}
+                              strokeWidth="3"
+                              strokeLinecap="round"
+                            />
+                          </svg>
+                          <span
+                            className="text-sm"
+                            style={{ color: Colors.textMuted }}
+                          >
+                            Loading customers...
+                          </span>
+                        </div>
+                      ) : filteredCustomers.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-8 gap-2">
+                          <Users size={24} style={{ color: Colors.border }} />
+                          <p
+                            className="text-sm"
+                            style={{ color: Colors.textMuted }}
+                          >
+                            {customerSearch
+                              ? "No users match your search"
+                              : "No customers found"}
+                          </p>
+                          {customerSearch && (
+                            <button
+                              onClick={() => setCustomerSearch("")}
+                              className="text-xs font-semibold px-3 py-1 rounded-lg"
+                              style={{
+                                color: Colors.primary,
+                                background: Colors.primaryLight,
+                              }}
+                            >
+                              Clear Search
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        filteredCustomers.map((customer) => {
+                          const isSelected = pushForm.selectedUsers.includes(
+                            customer._id,
+                          );
+                          const approvalBadge =
+                            customer.approvalStatus === "approved" ||
+                            customer.approvalStatus === "auto"
+                              ? {
+                                  color: "#059669",
+                                  bg: "#D1FAE5",
+                                  label: "Approved",
+                                }
+                              : customer.approvalStatus === "rejected"
+                                ? {
+                                    color: "#DC2626",
+                                    bg: "#FEE2E2",
+                                    label: "Rejected",
+                                  }
+                                : {
+                                    color: "#D97706",
+                                    bg: "#FEF3C7",
+                                    label: "Pending",
+                                  };
+
+                          return (
+                            <label
+                              key={customer._id}
+                              className="flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors"
+                              style={{
+                                background: isSelected
+                                  ? Colors.primaryLight
+                                  : "transparent",
+                                borderBottom: `1px solid ${Colors.divider}`,
+                              }}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setPushForm((p) => ({
+                                      ...p,
+                                      selectedUsers: [
+                                        ...p.selectedUsers,
+                                        customer._id,
+                                      ],
+                                    }));
+                                  } else {
+                                    setPushForm((p) => ({
+                                      ...p,
+                                      selectedUsers: p.selectedUsers.filter(
+                                        (id) => id !== customer._id,
+                                      ),
+                                    }));
+                                  }
+                                }}
+                                className="w-4 h-4 rounded flex-shrink-0"
+                                style={{ accentColor: Colors.primary }}
+                              />
+                              <div
+                                className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0"
+                                style={{
+                                  background: `linear-gradient(135deg, ${Colors.gradientStart}, ${Colors.gradientEnd})`,
+                                }}
+                              >
+                                {(customer.profile?.contactName || "U")
+                                  .charAt(0)
+                                  .toUpperCase()}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p
+                                  className="text-sm font-medium truncate"
+                                  style={{ color: Colors.textPrimary }}
+                                >
+                                  {customer.profile?.contactName ||
+                                    `User ${customer.phone.slice(-4)}`}
+                                </p>
+                                <p
+                                  className="text-xs"
+                                  style={{ color: Colors.textMuted }}
+                                >
+                                  +91 {customer.phone}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-2 flex-shrink-0">
+                                <span
+                                  className="text-xs px-2 py-0.5 rounded-lg font-medium"
+                                  style={{
+                                    background: approvalBadge.bg,
+                                    color: approvalBadge.color,
+                                  }}
+                                >
+                                  {approvalBadge.label}
+                                </span>
+                                <div
+                                  className="w-2 h-2 rounded-full"
+                                  style={{
+                                    background: customer.isActive
+                                      ? Colors.success
+                                      : Colors.error,
+                                  }}
+                                  title={
+                                    customer.isActive ? "Active" : "Inactive"
+                                  }
+                                />
+                              </div>
+                            </label>
+                          );
+                        })
+                      )}
+                    </div>
+
+                    {/* Close footer */}
+                    <div
+                      className="flex items-center justify-end px-4 py-2.5"
+                      style={{
+                        borderTop: `1px solid ${Colors.divider}`,
+                        background: Colors.surfaceAlt,
+                      }}
+                    >
+                      <button
+                        onClick={() => setShowUserDropdown(false)}
+                        className="flex items-center gap-1.5 text-xs font-semibold px-4 py-2 rounded-xl transition-all duration-150"
+                        style={{
+                          background: `linear-gradient(135deg, ${Colors.gradientStart}, ${Colors.gradientEnd})`,
+                          color: Colors.white,
+                        }}
+                      >
+                        Done
+                      </button>
+                    </div>
+                  </div>
+                )}
               </FieldRow>
             )}
 
@@ -1419,189 +1408,6 @@ export default function SettingsPage() {
             </div>
           </div>
         </SectionCard>
-
-        {/* ══════════════════════════════════════
-             DANGER ZONE
-        ══════════════════════════════════════ */}
-        {/* <div
-          className="rounded-3xl overflow-hidden"
-          style={{
-            background: Colors.surface,
-            border: `2px solid #FFD0DA`,
-            boxShadow: `0 4px 16px rgba(234,0,56,0.08)`,
-          }}
-        >
-          <div
-            className="flex items-center gap-3 px-6 py-5"
-            style={{ background: "#FFF5F7", borderBottom: `1px solid #FFD0DA` }}
-          >
-            <div
-              className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0"
-              style={{ background: "#FFF0F3" }}
-            >
-              <AlertTriangle size={20} color={Colors.error} strokeWidth={2} />
-            </div>
-            <div>
-              <p className="text-sm font-bold" style={{ color: Colors.error }}>
-                Danger Zone
-              </p>
-              <p className="text-xs" style={{ color: Colors.textMuted }}>
-                Irreversible actions — proceed with extreme caution
-              </p>
-            </div>
-          </div>
-
-          <div className="p-6 flex flex-col gap-4">
-            {[
-              {
-                icon: RefreshCw,
-                label: "Reset All Products",
-                desc: "Deletes all products, stocks and categories. Cannot be undone.",
-              },
-              {
-                icon: Users,
-                label: "Reset All Customers",
-                desc: "Permanently removes all customer records and order history.",
-              },
-              {
-                icon: Trash2,
-                label: "Factory Reset",
-                desc: "Wipes all data: products, customers, orders and settings.",
-              },
-            ].map(({ icon: Icon, label, desc }) => (
-              <div
-                key={label}
-                className="flex items-center justify-between p-4 rounded-2xl"
-                style={{ background: "#FFF8F9", border: `1px solid #FFD0DA` }}
-              >
-                <div className="flex items-center gap-3">
-                  <Icon size={18} color={Colors.error} strokeWidth={2} />
-                  <div>
-                    <p
-                      className="text-sm font-semibold"
-                      style={{ color: Colors.textPrimary }}
-                    >
-                      {label}
-                    </p>
-                    <p className="text-xs" style={{ color: Colors.textMuted }}>
-                      {desc}
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setShowDangerConfirm(true)}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold transition-all duration-150 flex-shrink-0 ml-4"
-                  style={{
-                    background: "#FFF0F3",
-                    color: Colors.error,
-                    border: `1.5px solid #FFD0DA`,
-                  }}
-                  onMouseEnter={(e) => {
-                    (e.currentTarget as HTMLElement).style.background =
-                      Colors.error;
-                    (e.currentTarget as HTMLElement).style.color = Colors.white;
-                  }}
-                  onMouseLeave={(e) => {
-                    (e.currentTarget as HTMLElement).style.background =
-                      "#FFF0F3";
-                    (e.currentTarget as HTMLElement).style.color = Colors.error;
-                  }}
-                >
-                  {label.split(" ")[0]}
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {showDangerConfirm && (
-          <div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4"
-            style={{ background: Colors.overlay }}
-          >
-            <div
-              className="w-full max-w-sm rounded-3xl p-6 relative"
-              style={{
-                background: Colors.surface,
-                boxShadow: "0 24px 64px rgba(0,0,0,0.25)",
-              }}
-            >
-              <button
-                onClick={() => {
-                  setShowDangerConfirm(false);
-                  setDangerInput("");
-                }}
-                className="absolute top-4 right-4 p-1.5 rounded-xl"
-                style={{ color: Colors.textMuted }}
-              >
-                <X size={18} />
-              </button>
-              <div
-                className="w-12 h-12 rounded-2xl flex items-center justify-center mb-4"
-                style={{ background: "#FFF0F3" }}
-              >
-                <AlertTriangle size={24} color={Colors.error} strokeWidth={2} />
-              </div>
-              <h3
-                className="text-base font-bold mb-1"
-                style={{ color: Colors.textPrimary }}
-              >
-                Are you absolutely sure?
-              </h3>
-              <p
-                className="text-sm mb-4"
-                style={{ color: Colors.textSecondary }}
-              >
-                This action is{" "}
-                <span className="font-bold" style={{ color: Colors.error }}>
-                  permanent and irreversible
-                </span>
-                . Type <span className="font-mono font-bold">RESET</span> to
-                confirm.
-              </p>
-              <input
-                type="text"
-                value={dangerInput}
-                onChange={(e) => setDangerInput(e.target.value)}
-                placeholder="Type RESET to confirm"
-                className="w-full px-4 py-3 rounded-2xl text-sm outline-none mb-4"
-                style={{
-                  border: `1.5px solid ${Colors.error}`,
-                  background: "#FFF8F9",
-                  color: Colors.textPrimary,
-                }}
-              />
-              <div className="flex gap-3">
-                <button
-                  onClick={() => {
-                    setShowDangerConfirm(false);
-                    setDangerInput("");
-                  }}
-                  className="flex-1 py-2.5 rounded-2xl text-sm font-semibold"
-                  style={{
-                    background: Colors.surfaceAlt,
-                    color: Colors.textSecondary,
-                    border: `1.5px solid ${Colors.border}`,
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleDangerReset}
-                  className="flex-1 py-2.5 rounded-2xl text-sm font-semibold transition-all duration-150"
-                  style={{
-                    background:
-                      dangerInput === "RESET" ? Colors.error : "#FFD0DA",
-                    color: dangerInput === "RESET" ? Colors.white : "#FFAAAA",
-                    cursor: dangerInput === "RESET" ? "pointer" : "not-allowed",
-                  }}
-                >
-                  Confirm Reset
-                </button>
-              </div>
-            </div>
-          </div>
-        )} */}
       </div>
 
       <style>{`
