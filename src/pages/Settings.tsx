@@ -16,6 +16,10 @@ import {
   Smartphone,
   ChevronDown,
   Search,
+  QrCode,
+  Upload,
+  Trash2,
+  Image,
 } from "lucide-react";
 import Colors from "../constants/colors";
 import { AdminAPI } from "../config/api";
@@ -265,6 +269,13 @@ export default function SettingsPage() {
     confirmPassword: "",
   });
 
+  // ── QR Code State ──────────────────────────────────────────────────────────
+  const [qrCodeUrl, setQrCodeUrl] = useState<string>("");
+  const [upiId, setUpiId] = useState<string>("");
+  const [qrFile, setQrFile] = useState<File | null>(null);
+  const [qrPreview, setQrPreview] = useState<string>("");
+  const qrFileInputRef = useRef<HTMLInputElement>(null);
+
   // ── Manual Push Notification State ──────────────────────────────────────────
   const [pushForm, setPushForm] = useState({
     title: "",
@@ -304,12 +315,141 @@ export default function SettingsPage() {
       .catch(() => setCurrentEmail("Unknown"));
   }, []);
 
+  // ── Fetch QR Code ────────────────────────────────────────────────────────
+  const fetchQRCode = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_BASE}/admin/qr-code`, {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const data = await res.json();
+      if (data.success && data.data) {
+        setQrCodeUrl(data.data.qrCodeUrl || "");
+        setUpiId(data.data.upiId || "");
+      }
+    } catch (err) {
+      console.error("Failed to fetch QR code:", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchQRCode();
+  }, []);
+
+  // ── QR Code Handlers ─────────────────────────────────────────────────────
+  const handleQRFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith("image/")) {
+      showToast("error", "Please select an image file (JPG, PNG, WebP).");
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      showToast("error", "File size must be less than 5MB.");
+      return;
+    }
+
+    setQrFile(file);
+
+    // Create preview
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setQrPreview(e.target?.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleUploadQR = async () => {
+    if (!qrFile) {
+      showToast("error", "Please select a QR code image first.");
+      return;
+    }
+
+    setLoading((p) => ({ ...p, qrUpload: true }));
+    try {
+      const token = localStorage.getItem("token");
+      const formData = new FormData();
+      formData.append("image", qrFile);
+      if (upiId.trim()) {
+        formData.append("upiId", upiId.trim());
+      }
+
+      const res = await fetch(`${API_BASE}/admin/qr-code`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setQrCodeUrl(data.data.qrCodeUrl);
+        setQrFile(null);
+        setQrPreview("");
+        if (qrFileInputRef.current) {
+          qrFileInputRef.current.value = "";
+        }
+        showToast("success", "QR code uploaded successfully!");
+      } else {
+        showToast("error", data.message || "Failed to upload QR code.");
+      }
+    } catch (err: any) {
+      showToast("error", err.message || "Failed to upload QR code.");
+    } finally {
+      setLoading((p) => ({ ...p, qrUpload: false }));
+    }
+  };
+
+  const handleDeleteQR = async () => {
+    if (!qrCodeUrl) {
+      showToast("error", "No QR code to delete.");
+      return;
+    }
+
+    setLoading((p) => ({ ...p, qrDelete: true }));
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_BASE}/admin/qr-code`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setQrCodeUrl("");
+        setUpiId("");
+        setQrFile(null);
+        setQrPreview("");
+        if (qrFileInputRef.current) {
+          qrFileInputRef.current.value = "";
+        }
+        showToast("success", "QR code deleted successfully!");
+      } else {
+        showToast("error", data.message || "Failed to delete QR code.");
+      }
+    } catch (err: any) {
+      showToast("error", err.message || "Failed to delete QR code.");
+    } finally {
+      setLoading((p) => ({ ...p, qrDelete: false }));
+    }
+  };
+
   // ── Fetch customers for push dropdown ────────────────────────────────────
   const fetchCustomers = async () => {
     setCustomersLoading(true);
     try {
-      const token =
-        localStorage.getItem("token") ?? localStorage.getItem("adminToken");
+      const token = localStorage.getItem("token");
       const res = await fetch(`${API_BASE}/admin/customers?limit=200`, {
         headers: {
           "Content-Type": "application/json",
@@ -540,10 +680,241 @@ export default function SettingsPage() {
               Settings
             </h1>
             <p className="text-xs" style={{ color: Colors.textMuted }}>
-              Manage admin credentials, push notifications and preferences
+              Manage admin credentials, payment QR, push notifications and
+              preferences
             </p>
           </div>
         </div>
+
+        {/* ══════════════════════════════════════
+             UPLOAD QR CODE FOR PAYMENT
+        ══════════════════════════════════════ */}
+        <SectionCard
+          icon={QrCode}
+          title="Payment QR Code"
+          subtitle="Upload QR code image for UPI payments"
+        >
+          <div className="flex flex-col gap-5">
+            {/* Current QR Code Display */}
+            {qrCodeUrl && (
+              <div
+                className="flex flex-col items-center gap-3 p-4 rounded-2xl"
+                style={{
+                  background: Colors.surfaceAlt,
+                  border: `1.5px solid ${Colors.border}`,
+                }}
+              >
+                <p
+                  className="text-xs font-semibold uppercase tracking-wide"
+                  style={{ color: Colors.textSecondary }}
+                >
+                  Current QR Code
+                </p>
+                <img
+                  src={qrCodeUrl}
+                  alt="Payment QR Code"
+                  className="w-40 h-40 object-contain rounded-xl"
+                  style={{ border: `1px solid ${Colors.border}` }}
+                />
+                <button
+                  onClick={handleDeleteQR}
+                  disabled={loading["qrDelete"]}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-150"
+                  style={{
+                    background: "#FFF0F3",
+                    color: Colors.error,
+                    border: `1.5px solid #FFD0DA`,
+                    opacity: loading["qrDelete"] ? 0.7 : 1,
+                    cursor: loading["qrDelete"] ? "not-allowed" : "pointer",
+                  }}
+                >
+                  {loading["qrDelete"] ? (
+                    <svg
+                      className="animate-spin"
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                    >
+                      <circle
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="rgba(220,38,38,0.3)"
+                        strokeWidth="3"
+                      />
+                      <path
+                        d="M12 2a10 10 0 0 1 10 10"
+                        stroke={Colors.error}
+                        strokeWidth="3"
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                  ) : (
+                    <Trash2 size={14} strokeWidth={2} />
+                  )}
+                  {loading["qrDelete"] ? "Deleting..." : "Remove QR Code"}
+                </button>
+              </div>
+            )}
+
+            {/* Upload New QR Code */}
+            <FieldRow label="Upload New QR Code Image">
+              <div
+                className="relative rounded-2xl overflow-hidden transition-all duration-200"
+                style={{
+                  background:
+                    focused === "qrUpload"
+                      ? Colors.primaryLight
+                      : Colors.surfaceAlt,
+                  border: `1.5px dashed ${focused === "qrUpload" ? Colors.borderFocus : Colors.border}`,
+                  cursor: "pointer",
+                }}
+                onClick={() => qrFileInputRef.current?.click()}
+              >
+                <input
+                  ref={qrFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleQRFileSelect}
+                  className="hidden"
+                />
+
+                {qrPreview ? (
+                  <div className="flex flex-col items-center gap-3 p-4">
+                    <img
+                      src={qrPreview}
+                      alt="QR Preview"
+                      className="w-32 h-32 object-contain rounded-xl"
+                      style={{ border: `1px solid ${Colors.border}` }}
+                    />
+                    <div className="flex items-center gap-2">
+                      <Image size={14} style={{ color: Colors.primary }} />
+                      <p
+                        className="text-xs font-medium"
+                        style={{ color: Colors.primary }}
+                      >
+                        {qrFile?.name}
+                      </p>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setQrFile(null);
+                          setQrPreview("");
+                          if (qrFileInputRef.current)
+                            qrFileInputRef.current.value = "";
+                        }}
+                        className="p-1 rounded-full hover:bg-red-50 transition-colors"
+                        style={{ color: Colors.error }}
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                    <p className="text-xs" style={{ color: Colors.textMuted }}>
+                      Click to change image
+                    </p>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center gap-2 py-8">
+                    <Upload size={24} style={{ color: Colors.textMuted }} />
+                    <p
+                      className="text-sm font-medium"
+                      style={{ color: Colors.textSecondary }}
+                    >
+                      Click to upload QR code image
+                    </p>
+                    <p className="text-xs" style={{ color: Colors.textMuted }}>
+                      Supported: JPG, PNG, WebP (Max 5MB)
+                    </p>
+                  </div>
+                )}
+              </div>
+            </FieldRow>
+
+            {/* UPI ID (Optional) */}
+            {/* <FieldRow label="UPI ID (Optional)">
+              <div
+                className="relative flex items-center rounded-2xl overflow-hidden transition-all duration-200"
+                style={{
+                  background:
+                    focused === "upiId"
+                      ? Colors.primaryLight
+                      : Colors.surfaceAlt,
+                  border: `1.5px solid ${focused === "upiId" ? Colors.borderFocus : Colors.border}`,
+                }}
+              >
+                <div
+                  className="absolute left-3.5 pointer-events-none"
+                  style={{
+                    color:
+                      focused === "upiId" ? Colors.primary : Colors.textMuted,
+                  }}
+                >
+                  <Smartphone size={17} strokeWidth={2} />
+                </div>
+                <input
+                  type="text"
+                  value={upiId}
+                  onChange={(e) => setUpiId(e.target.value)}
+                  onFocus={() => setFocused("upiId")}
+                  onBlur={() => setFocused("")}
+                  placeholder="e.g., merchant@upi"
+                  className="w-full pl-10 pr-4 py-3.5 text-sm outline-none bg-transparent"
+                  style={{ color: Colors.textPrimary }}
+                />
+              </div>
+            </FieldRow> */}
+
+            {/* Upload Button */}
+            <div className="flex justify-end">
+              <button
+                onClick={handleUploadQR}
+                disabled={!qrFile || loading["qrUpload"]}
+                className="flex items-center gap-2 px-6 py-2.5 rounded-2xl text-sm font-semibold transition-all duration-200"
+                style={{
+                  background: `linear-gradient(135deg, ${Colors.gradientStart}, ${Colors.gradientEnd})`,
+                  color: Colors.white,
+                  boxShadow: `0 4px 14px rgba(0,168,132,0.3)`,
+                  opacity: !qrFile || loading["qrUpload"] ? 0.7 : 1,
+                  cursor:
+                    !qrFile || loading["qrUpload"] ? "not-allowed" : "pointer",
+                }}
+              >
+                {loading["qrUpload"] ? (
+                  <>
+                    <svg
+                      className="animate-spin"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                    >
+                      <circle
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="rgba(255,255,255,0.3)"
+                        strokeWidth="3"
+                      />
+                      <path
+                        d="M12 2a10 10 0 0 1 10 10"
+                        stroke="white"
+                        strokeWidth="3"
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                    Uploading...
+                  </>
+                ) : (
+                  <>
+                    <Upload size={16} strokeWidth={2} />
+                    {qrCodeUrl ? "Update QR Code" : "Upload QR Code"}
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </SectionCard>
 
         {/* ══════════════════════════════════════
              PUSH NOTIFICATION BROADCAST
@@ -1101,6 +1472,7 @@ export default function SettingsPage() {
                   <option value="/(tabs)/products">Products Screen</option>
                   <option value="/(tabs)/myorders">My Orders</option>
                   <option value="/(tabs)/account">Account Screen</option>
+                  <option value="/notifications">Notifcation Screen</option>
                   <option value="/cart">Cart</option>
                 </select>
               </div>
