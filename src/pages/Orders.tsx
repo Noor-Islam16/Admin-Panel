@@ -18,6 +18,7 @@ import {
   Cable,
   Palette,
   ClipboardList,
+  Navigation,
 } from "lucide-react";
 import Colors from "../constants/colors";
 
@@ -216,13 +217,24 @@ function getCustomerAddress(order: Order): string {
   return parts.length > 0 ? parts.join(", ") : "No address provided";
 }
 
+function getCustomerLocation(order: Order): string {
+  const p = order.customer?.profile;
+  if (!p) return "N/A";
+  const parts = [p.city, p.state].filter(Boolean);
+  return parts.length > 0 ? parts.join(", ") : "N/A";
+}
+
+function getCustomerPincode(order: Order): string {
+  return order.customer?.profile?.pincode || "N/A";
+}
+
 function buildWhatsAppMessage(order: Order): string {
   const customerName = getCustomerName(order);
   const customerPhone = getCustomerPhone(order);
   const customerAddress = getCustomerAddress(order);
 
   const lines = [
-    `📱 *JholeSalers Store - Order Details*`,
+    `📱 *Thump Beyond Limits - Order Details*`,
     ``,
     `📋 *Order:* ${order.orderNumber}`,
     `📅 *Date:* ${new Date(order.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`,
@@ -459,6 +471,15 @@ function OrderDrawer({
                 <MapPin size={14} color={Colors.textMuted} className="mt-0.5" />
                 <p className="text-sm" style={{ color: Colors.textSecondary }}>
                   {getCustomerAddress(order)}
+                </p>
+              </div>
+              {/* Location in drawer */}
+              <div className="flex items-center gap-2">
+                <Navigation size={14} color={Colors.primary} />
+                <p className="text-sm" style={{ color: Colors.textSecondary }}>
+                  {getCustomerLocation(order)}
+                  {getCustomerPincode(order) !== "N/A" &&
+                    ` - ${getCustomerPincode(order)}`}
                 </p>
               </div>
             </div>
@@ -708,6 +729,7 @@ export default function Orders() {
           o.orderNumber.toLowerCase().includes(q) ||
           getCustomerName(o).toLowerCase().includes(q) ||
           getCustomerPhone(o).includes(q) ||
+          getCustomerLocation(o).toLowerCase().includes(q) ||
           o.items.some(
             (item) =>
               item.name.toLowerCase().includes(q) ||
@@ -986,7 +1008,7 @@ export default function Orders() {
             </p>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[900px]">
+            <table className="w-full min-w-[1100px]">
               <thead>
                 <tr style={{ background: Colors.surfaceAlt }}>
                   {[
@@ -997,6 +1019,7 @@ export default function Orders() {
                     "Payment",
                     "Status",
                     "Time",
+                    "Location",
                     "",
                   ].map((h) => (
                     <th
@@ -1012,7 +1035,7 @@ export default function Orders() {
               <tbody>
                 {filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="py-16 text-center">
+                    <td colSpan={9} className="py-16 text-center">
                       <ClipboardList size={36} color={Colors.border} />
                       <p
                         className="text-sm mt-2"
@@ -1094,6 +1117,27 @@ export default function Orders() {
                         >
                           {timeAgo(order.createdAt)}
                         </p>
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-1.5">
+                          <Navigation size={12} color={Colors.primary} />
+                          <div>
+                            <p
+                              className="text-xs font-medium"
+                              style={{ color: Colors.textPrimary }}
+                            >
+                              {getCustomerLocation(order)}
+                            </p>
+                            {getCustomerPincode(order) !== "N/A" && (
+                              <p
+                                className="text-xs"
+                                style={{ color: Colors.textMuted }}
+                              >
+                                {getCustomerPincode(order)}
+                              </p>
+                            )}
+                          </div>
+                        </div>
                       </td>
                       <td className="px-5 py-4">
                         <button

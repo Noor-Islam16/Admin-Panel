@@ -18,6 +18,11 @@ import {
   Boxes,
   Plus,
   Cloud,
+  RotateCw,
+  Crop,
+  Check,
+  XCircle,
+  Pencil,
 } from "lucide-react";
 import Colors from "../constants/colors";
 import { CATEGORIES } from "../constants/products";
@@ -32,7 +37,7 @@ interface ProductForm {
   originalPrice: string;
   stock: string;
   minOrderQty: string;
-  maxOrderQty: string; // ✅ NEW
+  maxOrderQty: string;
   description: string;
 }
 
@@ -46,10 +51,16 @@ interface BulkRow {
   description: string;
   image_urls: string;
   min_order_qty: string;
-  max_order_qty: string; // ✅ NEW
+  max_order_qty: string;
   stock: string;
   status: "valid" | "error";
   error?: string;
+}
+
+interface ImagePreview {
+  file: File;
+  preview: string;
+  id: string;
 }
 
 const EMPTY_FORM: ProductForm = {
@@ -60,9 +71,303 @@ const EMPTY_FORM: ProductForm = {
   originalPrice: "",
   stock: "",
   minOrderQty: "1",
-  maxOrderQty: "", // ✅ NEW - empty means no limit
+  maxOrderQty: "",
   description: "",
 };
+
+// ── Image Editor Modal ────────────────────────────────────────────────────────
+function ImageEditorModal({
+  image,
+  onSave,
+  onClose,
+}: {
+  image: ImagePreview;
+  onSave: (editedFile: File, previewUrl: string) => void;
+  onClose: () => void;
+}) {
+  const [rotation, setRotation] = useState(0);
+  const [zoom, setZoom] = useState(100);
+  const [cropMode, setCropMode] = useState(false);
+  const [cropArea, setCropArea] = useState({
+    x: 0,
+    y: 0,
+    width: 100,
+    height: 100,
+  });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const imageRef = useRef<HTMLImageElement>(null);
+
+  const handleRotate = () => {
+    setRotation((prev) => (prev + 90) % 360);
+  };
+
+  const handleZoomIn = () => {
+    setZoom((prev) => Math.min(prev + 10, 200));
+  };
+
+  const handleZoomOut = () => {
+    setZoom((prev) => Math.max(prev - 10, 50));
+  };
+
+  const handleCropToggle = () => {
+    setCropMode(!cropMode);
+    if (!cropMode) {
+      setCropArea({ x: 25, y: 25, width: 50, height: 50 });
+    }
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (!cropMode) return;
+    setIsDragging(true);
+    setDragStart({ x: e.clientX, y: e.clientY });
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging || !cropMode) return;
+    const dx = e.clientX - dragStart.x;
+    const dy = e.clientY - dragStart.y;
+    setCropArea((prev) => ({
+      ...prev,
+      x: Math.max(0, Math.min(prev.x + dx / 5, 100 - prev.width)),
+      y: Math.max(0, Math.min(prev.y + dy / 5, 100 - prev.height)),
+    }));
+    setDragStart({ x: e.clientX, y: e.clientY });
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  const handleSave = () => {
+    const canvas = canvasRef.current;
+    const img = imageRef.current;
+    if (!canvas || !img) return;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+
+    // Clear canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Apply rotation
+    ctx.save();
+    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.rotate((rotation * Math.PI) / 180);
+    ctx.translate(-canvas.width / 2, -canvas.height / 2);
+
+    // Draw image with zoom
+    const zoomFactor = zoom / 100;
+    const drawWidth = canvas.width * zoomFactor;
+    const drawHeight = canvas.height * zoomFactor;
+    const dx = (canvas.width - drawWidth) / 2;
+    const dy = (canvas.height - drawHeight) / 2;
+    ctx.drawImage(img, dx, dy, drawWidth, drawHeight);
+    ctx.restore();
+
+    // Apply crop if in crop mode
+    if (cropMode) {
+      const cropX = (canvas.width * cropArea.x) / 100;
+      const cropY = (canvas.height * cropArea.y) / 100;
+      const cropW = (canvas.width * cropArea.width) / 100;
+      const cropH = (canvas.height * cropArea.height) / 100;
+
+      const imageData = ctx.getImageData(cropX, cropY, cropW, cropH);
+      canvas.width = cropW;
+      canvas.height = cropH;
+      ctx.putImageData(imageData, 0, 0);
+    }
+
+    canvas.toBlob((blob) => {
+      if (blob) {
+        const newFile = new File([blob], image.file.name, {
+          type: image.file.type,
+        });
+        const previewUrl = URL.createObjectURL(blob);
+        onSave(newFile, previewUrl);
+      }
+    }, image.file.type);
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: Colors.overlay }}
+    >
+      <div
+        className="w-full max-w-2xl rounded-3xl overflow-hidden"
+        style={{
+          background: Colors.surface,
+          boxShadow: "0 24px 64px rgba(0,0,0,0.22)",
+        }}
+      >
+        {/* Header */}
+        <div
+          className="flex items-center justify-between px-6 py-4"
+          style={{
+            background: `linear-gradient(135deg, ${Colors.gradientStart}, ${Colors.gradientEnd})`,
+          }}
+        >
+          <p className="text-base font-bold text-white">Edit Image</p>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-xl"
+            style={{
+              background: "rgba(255,255,255,0.18)",
+              color: Colors.white,
+            }}
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="p-6">
+          {/* Image Preview */}
+          <div
+            className="relative rounded-2xl overflow-hidden mb-4"
+            style={{
+              background: Colors.surfaceAlt,
+              minHeight: 300,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseUp}
+          >
+            <img
+              ref={imageRef}
+              src={image.preview}
+              alt="Edit preview"
+              style={{
+                maxWidth: "100%",
+                maxHeight: 400,
+                transform: `rotate(${rotation}deg) scale(${zoom / 100})`,
+                objectFit: "contain",
+              }}
+            />
+
+            {/* Crop overlay */}
+            {cropMode && (
+              <div
+                className="absolute border-2 border-white"
+                style={{
+                  left: `${cropArea.x}%`,
+                  top: `${cropArea.y}%`,
+                  width: `${cropArea.width}%`,
+                  height: `${cropArea.height}%`,
+                  boxShadow: "0 0 0 9999px rgba(0,0,0,0.5)",
+                  cursor: "move",
+                }}
+              />
+            )}
+          </div>
+
+          {/* Controls */}
+          <div className="flex items-center gap-3 flex-wrap mb-4">
+            <button
+              onClick={handleRotate}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold"
+              style={{
+                background: Colors.surfaceAlt,
+                color: Colors.textPrimary,
+                border: `1.5px solid ${Colors.border}`,
+              }}
+            >
+              <RotateCw size={16} /> Rotate 90°
+            </button>
+            <button
+              onClick={handleZoomIn}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold"
+              style={{
+                background: Colors.surfaceAlt,
+                color: Colors.textPrimary,
+                border: `1.5px solid ${Colors.border}`,
+              }}
+            >
+              <Plus size={16} /> Zoom In
+            </button>
+            <button
+              onClick={handleZoomOut}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold"
+              style={{
+                background: Colors.surfaceAlt,
+                color: Colors.textPrimary,
+                border: `1.5px solid ${Colors.border}`,
+              }}
+            >
+              <span style={{ fontSize: 18, fontWeight: "bold" }}>−</span> Zoom
+              Out
+            </button>
+            <button
+              onClick={handleCropToggle}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold"
+              style={{
+                background: cropMode ? Colors.primaryLight : Colors.surfaceAlt,
+                color: cropMode ? Colors.primary : Colors.textPrimary,
+                border: `1.5px solid ${cropMode ? Colors.accentLight : Colors.border}`,
+              }}
+            >
+              <Crop size={16} /> {cropMode ? "Crop Mode ON" : "Crop"}
+            </button>
+            <span
+              className="text-xs px-3 py-1 rounded-lg"
+              style={{
+                background: Colors.surfaceAlt,
+                color: Colors.textMuted,
+              }}
+            >
+              Zoom: {zoom}%
+            </span>
+            {cropMode && (
+              <span
+                className="text-xs px-3 py-1 rounded-lg"
+                style={{
+                  background: Colors.warning + "18",
+                  color: Colors.warning,
+                }}
+              >
+                Drag to position crop area
+              </span>
+            )}
+          </div>
+
+          {/* Actions */}
+          <div className="flex gap-3">
+            <button
+              onClick={onClose}
+              className="flex-1 py-3 rounded-2xl text-sm font-semibold"
+              style={{
+                background: Colors.surfaceAlt,
+                color: Colors.textSecondary,
+                border: `1.5px solid ${Colors.border}`,
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              className="flex-1 py-3 rounded-2xl text-sm font-semibold flex items-center justify-center gap-2"
+              style={{
+                background: `linear-gradient(135deg, ${Colors.gradientStart}, ${Colors.gradientEnd})`,
+                color: Colors.white,
+              }}
+            >
+              <Check size={16} /> Apply Changes
+            </button>
+          </div>
+        </div>
+      </div>
+      <canvas ref={canvasRef} className="hidden" />
+    </div>
+  );
+}
 
 // ── Shared UI Components ──────────────────────────────────────────────────────
 function FieldLabel({ children }: { children: React.ReactNode }) {
@@ -201,8 +506,8 @@ export default function AddProducts() {
   const [submitting, setSubmitting] = useState(false);
 
   // Multiple images for single product
-  const [imageFiles, setImageFiles] = useState<File[]>([]);
-  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  const [imagePreviews, setImagePreviews] = useState<ImagePreview[]>([]);
+  const [editingImage, setEditingImage] = useState<ImagePreview | null>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
 
   // Bulk
@@ -224,26 +529,49 @@ export default function AddProducts() {
   // ── Single Product Image Handlers ──────────────────────────────────────────
   const handleImageFilesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    if (imageFiles.length + files.length > 8) {
+    if (imagePreviews.length + files.length > 8) {
       showToast("error", "Maximum 8 images allowed");
       return;
     }
-    const newPreviews = files.map((file) => URL.createObjectURL(file));
-    setImageFiles((prev) => [...prev, ...files]);
-    setImagePreviews((prev) => [...prev, ...newPreviews]);
+    const newImages = files.map((file) => ({
+      file,
+      preview: URL.createObjectURL(file),
+      id: `img-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    }));
+    setImagePreviews((prev) => [...prev, ...newImages]);
   };
 
-  const removeImage = (index: number) => {
-    URL.revokeObjectURL(imagePreviews[index]);
-    setImageFiles((prev) => prev.filter((_, i) => i !== index));
-    setImagePreviews((prev) => prev.filter((_, i) => i !== index));
+  const removeImage = (id: string) => {
+    setImagePreviews((prev) => {
+      const image = prev.find((img) => img.id === id);
+      if (image) {
+        URL.revokeObjectURL(image.preview);
+      }
+      return prev.filter((img) => img.id !== id);
+    });
   };
 
   const clearAllImages = () => {
-    imagePreviews.forEach((url) => URL.revokeObjectURL(url));
-    setImageFiles([]);
+    imagePreviews.forEach((img) => URL.revokeObjectURL(img.preview));
     setImagePreviews([]);
     if (imageInputRef.current) imageInputRef.current.value = "";
+  };
+
+  const handleEditImage = (image: ImagePreview) => {
+    setEditingImage(image);
+  };
+
+  const handleSaveEditedImage = (editedFile: File, previewUrl: string) => {
+    setImagePreviews((prev) =>
+      prev.map((img) => {
+        if (img.id === editingImage?.id) {
+          URL.revokeObjectURL(img.preview);
+          return { ...img, file: editedFile, preview: previewUrl };
+        }
+        return img;
+      }),
+    );
+    setEditingImage(null);
   };
 
   // ── Single Submit ──────────────────────────────────────────────────────────
@@ -271,12 +599,12 @@ export default function AddProducts() {
       fd.append("sellingPrice", form.price);
       fd.append("stockQuantity", form.stock);
       fd.append("minOrderQuantity", form.minOrderQty);
-      if (form.maxOrderQty) fd.append("maxOrderQuantity", form.maxOrderQty); // ✅ NEW
+      if (form.maxOrderQty) fd.append("maxOrderQuantity", form.maxOrderQty);
       if (form.brand.trim()) fd.append("brand", form.brand.trim());
       if (form.originalPrice) fd.append("originalPrice", form.originalPrice);
       if (form.description.trim())
         fd.append("description", form.description.trim());
-      imageFiles.forEach((file) => fd.append("images", file));
+      imagePreviews.forEach((img) => fd.append("images", img.file));
       await ProductAPI.addSingle(fd);
       showToast("success", `"${form.name}" added successfully!`);
       setForm(EMPTY_FORM);
@@ -402,7 +730,7 @@ export default function AddProducts() {
         description: obj["description"] ?? "",
         image_urls: imageUrls.join(","),
         min_order_qty: obj["min_order_qty"] ?? "1",
-        max_order_qty: obj["max_order_qty"] ?? "", // ✅ NEW - empty means no limit
+        max_order_qty: obj["max_order_qty"] ?? "",
         stock: obj["stock"] ?? "",
         status: hasError ? "error" : "valid",
         error: hasError
@@ -444,7 +772,62 @@ export default function AddProducts() {
   };
 
   const removeRow = (id: string) => {
-    setBulkRows((prev) => prev.filter((r) => r.id !== id));
+    setBulkRows((prev) => {
+      const updatedRows = prev.filter((r) => r.id !== id);
+
+      // ✅ FIX: Update the file reference with only remaining rows
+      if (updatedRows.length > 0 && bulkFileRef.current) {
+        // Create a new CSV file with only the remaining rows
+        const headers = [
+          "name",
+          "brand",
+          "category",
+          "price",
+          "original_price",
+          "stock",
+          "min_order_qty",
+          "max_order_qty",
+          "description",
+          "image_1",
+          "image_2",
+          "image_3",
+          "image_4",
+          "image_5",
+          "image_6",
+          "image_7",
+          "image_8",
+        ];
+
+        const rows = updatedRows.map((row) => [
+          row.name,
+          row.brand,
+          row.category,
+          row.price,
+          row.originalPrice,
+          row.stock,
+          row.min_order_qty,
+          row.max_order_qty,
+          row.description,
+          ...Array.from({ length: 8 }, (_, i) => {
+            const imageUrls = row.image_urls.split(",").filter(Boolean);
+            return imageUrls[i] || "";
+          }),
+        ]);
+
+        const csvContent = [headers, ...rows]
+          .map((row) => row.map((cell) => `"${cell}"`).join(","))
+          .join("\n");
+
+        const blob = new Blob([csvContent], { type: "text/csv" });
+        const newFile = new File([blob], bulkFileRef.current.name, {
+          type: "text/csv",
+          lastModified: Date.now(),
+        });
+        bulkFileRef.current = newFile;
+      }
+
+      return updatedRows;
+    });
   };
 
   // ── Bulk Submit (sends the file directly to backend) ────────────────────────
@@ -495,7 +878,7 @@ export default function AddProducts() {
     }
   };
 
-  // ── Download Template with separate image columns ───────────────────────────
+  // ── Download Template ───────────────────────────────────────────────────────
   const downloadTemplate = () => {
     const headers = [
       "name",
@@ -527,7 +910,6 @@ export default function AddProducts() {
         "2",
         "10",
         "Fast charging USB-C cable with 60W PD support",
-        // Example with Google Drive URL
         "https://drive.google.com/file/d/1EXAMPLE_DRIVE_ID1/view?usp=drive_link",
         "https://res.cloudinary.com/your-cloud/image/upload/v123/product1-back.jpg",
         "",
@@ -564,9 +946,8 @@ export default function AddProducts() {
         "1299",
         "200",
         "1",
-        "", // Empty = no limit
+        "",
         "Compact 20W PD fast charger",
-        // Mix of Google Drive and Cloudinary
         "https://drive.google.com/file/d/1EXAMPLE_DRIVE_ID3/view?usp=drive_link",
         "https://res.cloudinary.com/your-cloud/image/upload/v123/product3-back.jpg",
         "",
@@ -602,6 +983,13 @@ export default function AddProducts() {
           type={toast.type}
           message={toast.message}
           onClose={() => setToast(null)}
+        />
+      )}
+      {editingImage && (
+        <ImageEditorModal
+          image={editingImage}
+          onSave={handleSaveEditedImage}
+          onClose={() => setEditingImage(null)}
         />
       )}
 
@@ -656,6 +1044,7 @@ export default function AddProducts() {
                 Product Details
               </p>
 
+              {/* Form fields - same as before */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="flex flex-col gap-1.5">
                   <FieldLabel>Product Name *</FieldLabel>
@@ -868,7 +1257,6 @@ export default function AddProducts() {
                 </div>
               </div>
 
-              {/* ✅ NEW: Max Order Quantity */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="flex flex-col gap-1.5">
                   <FieldLabel>Max Order Quantity</FieldLabel>
@@ -897,7 +1285,6 @@ export default function AddProducts() {
                     />
                   </InputWrapper>
                 </div>
-                {/* Spacer to keep grid alignment */}
                 <div />
               </div>
 
@@ -935,12 +1322,12 @@ export default function AddProducts() {
                 </div>
               </div>
 
-              {/* Single Product Images */}
+              {/* ═══ UPDATED: Single Product Images with Edit Button ═══ */}
               <div className="flex flex-col gap-1.5">
                 <div className="flex items-center justify-between">
                   <FieldLabel>Product Images (Max 8)</FieldLabel>
                   <span className="text-xs" style={{ color: Colors.textMuted }}>
-                    {imageFiles.length}/8
+                    {imagePreviews.length}/8
                   </span>
                 </div>
                 <input
@@ -954,22 +1341,22 @@ export default function AddProducts() {
                 {imagePreviews.length > 0 ? (
                   <div className="flex flex-col gap-3">
                     <div className="grid grid-cols-4 gap-3">
-                      {imagePreviews.map((preview, index) => (
+                      {imagePreviews.map((image, index) => (
                         <div
-                          key={index}
-                          className="relative rounded-xl overflow-hidden aspect-square"
+                          key={image.id}
+                          className="relative rounded-xl overflow-hidden aspect-square group"
                           style={{
                             border: `2px solid ${index === 0 ? Colors.primary : Colors.border}`,
                           }}
                         >
                           <img
-                            src={preview}
+                            src={image.preview}
                             alt={`Product ${index + 1}`}
                             className="w-full h-full object-cover"
                           />
                           {index === 0 && (
                             <span
-                              className="absolute top-1 left-1 px-1.5 py-0.5 rounded-md text-xs font-bold"
+                              className="absolute top-1 left-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold z-10"
                               style={{
                                 background: Colors.primary,
                                 color: Colors.white,
@@ -978,19 +1365,34 @@ export default function AddProducts() {
                               Primary
                             </span>
                           )}
+                          {/* Edit button - visible on hover */}
+                          <div className="absolute inset-0 flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-black/40">
+                            <button
+                              onClick={() => handleEditImage(image)}
+                              className="p-2 rounded-full bg-white/90 hover:bg-white transition-colors"
+                              title="Edit image"
+                            >
+                              <Pencil size={14} color={Colors.textPrimary} />
+                            </button>
+                            <button
+                              onClick={() => removeImage(image.id)}
+                              className="p-2 rounded-full bg-white/90 hover:bg-white transition-colors"
+                              title="Remove image"
+                            >
+                              <X size={14} color={Colors.error} />
+                            </button>
+                          </div>
+                          {/* Edit icon always visible */}
                           <button
-                            onClick={() => removeImage(index)}
-                            className="absolute top-1 right-1 p-1 rounded-full"
-                            style={{
-                              background: "rgba(0,0,0,0.5)",
-                              color: Colors.white,
-                            }}
+                            onClick={() => handleEditImage(image)}
+                            className="absolute top-1 right-1 p-1.5 rounded-full bg-black/50 hover:bg-black/70 transition-colors"
+                            title="Edit image"
                           >
-                            <X size={12} />
+                            <Crop size={12} color="white" />
                           </button>
                         </div>
                       ))}
-                      {imageFiles.length < 8 && (
+                      {imagePreviews.length < 8 && (
                         <button
                           onClick={() => imageInputRef.current?.click()}
                           className="aspect-square rounded-xl flex flex-col items-center justify-center gap-1 transition-all"
@@ -1080,9 +1482,10 @@ export default function AddProducts() {
           </div>
         )}
 
-        {/* ═══ TAB: BULK UPLOAD ═══ */}
+        {/* ═══ TAB: BULK UPLOAD (unchanged except for removeRow fix) ═══ */}
         {tab === "bulk" && (
           <div className="flex flex-col gap-5">
+            {/* Same bulk upload UI as before */}
             <div
               className="rounded-3xl p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
               style={{
@@ -1110,7 +1513,6 @@ export default function AddProducts() {
                   <strong>✅ Supported image sources:</strong>
                 </p>
 
-                {/* Google Drive URLs section */}
                 <div
                   className="rounded-xl p-3 mt-1"
                   style={{ background: Colors.surface }}
@@ -1150,30 +1552,6 @@ export default function AddProducts() {
                     URL.
                   </p>
                 </div>
-
-                {/* Cloudinary URLs section - keep this */}
-                {/* <div
-                  className="rounded-xl p-3"
-                  style={{ background: Colors.surface }}
-                >
-                  <p
-                    className="text-xs font-semibold flex items-center gap-1"
-                    style={{ color: Colors.primary }}
-                  >
-                    <ImageIcon size={14} /> Cloudinary URLs (also supported)
-                  </p>
-                  <code
-                    className="block mt-1 p-2 rounded-lg text-xs"
-                    style={{
-                      background: Colors.surfaceAlt,
-                      color: Colors.textPrimary,
-                      wordBreak: "break-all",
-                      fontSize: "11px",
-                    }}
-                  >
-                    https://res.cloudinary.com/your-cloud/image/upload/v123/product.jpg
-                  </code>
-                </div> */}
 
                 <p
                   className="text-xs mt-1"
@@ -1523,6 +1901,13 @@ export default function AddProducts() {
           </div>
         )}
       </div>
+
+      <style>{`
+        @keyframes slideUp { from { transform: translateY(16px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        input::placeholder { color: ${Colors.textMuted}; }
+        select option { color: ${Colors.textPrimary}; background: ${Colors.surface}; }
+      `}</style>
     </>
   );
 }

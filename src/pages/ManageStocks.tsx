@@ -17,6 +17,8 @@ import {
   Check,
   PackageX,
   Smartphone,
+  ToggleLeft,
+  ToggleRight,
 } from "lucide-react";
 import Colors from "../constants/colors";
 import { CATEGORIES } from "../constants/products";
@@ -123,7 +125,55 @@ function ProductThumb({
   );
 }
 
-// ── Qty Adjust Cell ───────────────────────────────────────────────────────────
+// ── Order Limits Toggle Cell ──────────────────────────────────────────────────
+function ToggleLimitsCell({
+  product,
+  onToggle,
+}: {
+  product: StockProduct;
+  onToggle: (id: string, value: boolean) => void;
+}) {
+  const [loading, setLoading] = useState(false);
+  const isOn = product.enforceOrderLimits !== false;
+
+  const handleToggle = async () => {
+    const newValue = !isOn;
+    setLoading(true);
+    try {
+      await onToggle(product._id, newValue);
+    } catch {
+      // Error handled in parent
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <button
+      onClick={handleToggle}
+      disabled={loading}
+      className="flex items-center gap-2 transition-all duration-200"
+      title={
+        isOn
+          ? "Order limits enforced (min/max apply)"
+          : "No order limits (unlimited orders)"
+      }
+    >
+      {isOn ? (
+        <ToggleRight size={20} color={Colors.success} />
+      ) : (
+        <ToggleLeft size={20} color={Colors.textMuted} />
+      )}
+      <span
+        className="text-xs font-medium whitespace-nowrap"
+        style={{ color: isOn ? Colors.success : Colors.textMuted }}
+      >
+        {isOn ? "ON" : "OFF"}
+      </span>
+    </button>
+  );
+}
+
 // ── Qty Adjust Cell ───────────────────────────────────────────────────────────
 function QtyCell({
   product,
@@ -135,6 +185,7 @@ function QtyCell({
   const [editMode, setEditMode] = useState(false);
   const [inputVal, setInputVal] = useState(String(product.stockQuantity));
   const [stepVal, setStepVal] = useState(String(product.minOrderQuantity ?? 1));
+  const limitsEnabled = product.enforceOrderLimits !== false;
 
   const commitSet = () => {
     const n = parseInt(inputVal);
@@ -248,25 +299,32 @@ function QtyCell({
           style={{ color: Colors.textMuted }}
         />
       </div>
-      {/* ✅ NEW: Min/Max order quantity info */}
-      <div className="flex items-center gap-2">
-        <span className="text-xs" style={{ color: Colors.textMuted }}>
-          min {product.minOrderQuantity}
+      {/* Only show min/max info when limits are enforced */}
+      {limitsEnabled && (
+        <div className="flex items-center gap-2">
+          <span className="text-xs" style={{ color: Colors.textMuted }}>
+            min {product.minOrderQuantity}
+          </span>
+          {product.maxOrderQuantity && (
+            <>
+              <span
+                className="text-xs opacity-40"
+                style={{ color: Colors.textMuted }}
+              >
+                ·
+              </span>
+              <span className="text-xs" style={{ color: Colors.textMuted }}>
+                max {product.maxOrderQuantity}
+              </span>
+            </>
+          )}
+        </div>
+      )}
+      {!limitsEnabled && (
+        <span className="text-xs italic" style={{ color: Colors.warning }}>
+          No order limits
         </span>
-        {product.maxOrderQuantity && (
-          <>
-            <span
-              className="text-xs opacity-40"
-              style={{ color: Colors.textMuted }}
-            >
-              ·
-            </span>
-            <span className="text-xs" style={{ color: Colors.textMuted }}>
-              max {product.maxOrderQuantity}
-            </span>
-          </>
-        )}
-      </div>
+      )}
     </div>
   );
 }
@@ -274,7 +332,7 @@ function QtyCell({
 function SkeletonRow() {
   return (
     <tr style={{ borderTop: `1px solid ${Colors.divider}` }}>
-      {Array.from({ length: 7 }).map((_, i) => (
+      {Array.from({ length: 8 }).map((_, i) => (
         <td key={i} className="px-4 py-4">
           <div
             className="h-4 rounded-lg animate-pulse"
@@ -341,12 +399,16 @@ export default function ManageStocks() {
 
         setProducts((prev) => {
           const alertMap: Record<string, number> = {};
+          const limitsMap: Record<string, boolean> = {};
           prev.forEach((p) => {
             alertMap[p._id] = p.minStockAlert;
+            limitsMap[p._id] = p.enforceOrderLimits ?? true;
           });
           return raw.map((p) => ({
             ...p,
             minStockAlert: alertMap[p._id] ?? 10,
+            enforceOrderLimits:
+              limitsMap[p._id] ?? p.enforceOrderLimits !== false,
           }));
         });
         setTotalPages(pagination.totalPages);
@@ -428,6 +490,31 @@ export default function ManageStocks() {
       showToast("error", e instanceof Error ? e.message : "Update failed.");
     } finally {
       clearPending(id);
+    }
+  };
+
+  // ── Toggle order limits ───────────────────────────────────────────────────
+  const handleToggleLimits = async (id: string, value: boolean) => {
+    try {
+      await StockAPI.toggleOrderLimits(id, value);
+
+      // Update local state
+      setProducts((prev) =>
+        prev.map((p) =>
+          p._id === id ? { ...p, enforceOrderLimits: value } : p,
+        ),
+      );
+
+      showToast(
+        "success",
+        `Order limits ${value ? "enabled" : "disabled"} for this product`,
+      );
+    } catch (e) {
+      showToast(
+        "error",
+        e instanceof Error ? e.message : "Failed to toggle order limits",
+      );
+      throw e; // Re-throw so ToggleLimitsCell can handle loading state
     }
   };
 
@@ -746,12 +833,12 @@ export default function ManageStocks() {
                 : `${filtered.length} of ${totalCount} products`}
             </p>
             <p className="text-xs" style={{ color: Colors.textMuted }}>
-              Click qty number to type exact value
+              Click qty number to type exact value · Toggle limits per product
             </p>
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[800px]">
+            <table className="w-full min-w-[900px]">
               <thead>
                 <tr style={{ background: Colors.surfaceAlt }}>
                   {[
@@ -760,6 +847,7 @@ export default function ManageStocks() {
                     "Category",
                     "Status",
                     "Qty / Adjust",
+                    "Limits",
                     "",
                   ].map((h) => (
                     <th
@@ -779,7 +867,7 @@ export default function ManageStocks() {
                   ))
                 ) : filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="py-16 text-center">
+                    <td colSpan={7} className="py-16 text-center">
                       <div className="flex flex-col items-center gap-2">
                         <Smartphone
                           size={36}
@@ -874,6 +962,12 @@ export default function ManageStocks() {
                         </td>
                         <td className="px-4 py-4">
                           <QtyCell product={product} onUpdate={handleUpdate} />
+                        </td>
+                        <td className="px-4 py-4">
+                          <ToggleLimitsCell
+                            product={product}
+                            onToggle={handleToggleLimits}
+                          />
                         </td>
                         <td className="px-4 py-4">
                           {product.stockQuantity === 0 && (

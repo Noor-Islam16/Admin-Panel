@@ -64,6 +64,7 @@ export interface ApiProduct {
   stockQuantity: number;
   minOrderQuantity: number;
   maxOrderQuantity: number;
+  enforceOrderLimits?: boolean;
   description?: string;
   specifications?: Record<string, string>;
   images: ProductImage[];
@@ -184,10 +185,6 @@ export const ProductAPI = {
     }),
 };
 
-// ════════════════════════════════════════════════════════════════════════════════
-// STOCK API
-// ════════════════════════════════════════════════════════════════════════════════
-
 export const StockAPI = {
   /** GET /api/stocks/stats */
   getStats: () =>
@@ -239,6 +236,17 @@ export const StockAPI = {
     request<{ success: boolean; message: string }>(`/stocks/${id}/alert`, {
       method: "PATCH",
       body: JSON.stringify({ alertAt }),
+    }),
+
+  /** PATCH /api/stocks/:id/toggle-order-limits */
+  toggleOrderLimits: (id: string, enforceOrderLimits: boolean) =>
+    request<{
+      success: boolean;
+      message: string;
+      data: { enforceOrderLimits: boolean };
+    }>(`/stocks/${id}/toggle-order-limits`, {
+      method: "PATCH",
+      body: JSON.stringify({ enforceOrderLimits }),
     }),
 
   /** POST /api/stocks/restock-all-oos */

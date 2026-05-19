@@ -1398,7 +1398,7 @@ export default function ViewProducts() {
             ) : products.length === 0 ? (
               <EmptyState />
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
                 {products.map((product) => {
                   const stock = stockStatus(product);
                   const discount = getDiscount(product);
@@ -1406,29 +1406,27 @@ export default function ViewProducts() {
                   return (
                     <div
                       key={product._id}
-                      className="rounded-3xl overflow-hidden flex flex-col transition-all duration-200 group"
+                      className="flex flex-col transition-all duration-200 group"
                       style={{
-                        background: Colors.surface,
-                        border: `1px solid ${Colors.border}`,
-                        boxShadow: `0 2px 12px ${Colors.shadow}`,
                         opacity: isPending ? 0.75 : 1,
                       }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.boxShadow = `0 8px 28px ${Colors.shadowMedium}`;
-                        e.currentTarget.style.transform = "translateY(-2px)";
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.boxShadow = `0 2px 12px ${Colors.shadow}`;
-                        e.currentTarget.style.transform = "translateY(0)";
-                      }}
                     >
-                      {/* Image */}
+                      {/* Image Card Wrapper - Increased height */}
                       <div
-                        className="relative"
+                        className="relative rounded-3xl overflow-hidden transition-all duration-200"
                         style={{
-                          height: 200,
+                          height: 320, // Increased height from 200 to 320
                           background: Colors.surfaceAlt,
-                          overflow: "hidden",
+                          border: `1px solid ${Colors.border}`,
+                          boxShadow: `0 2px 12px ${Colors.shadow}`,
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.boxShadow = `0 8px 28px ${Colors.shadowMedium}`;
+                          e.currentTarget.style.transform = "translateY(-2px)";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.boxShadow = `0 2px 12px ${Colors.shadow}`;
+                          e.currentTarget.style.transform = "translateY(0)";
                         }}
                       >
                         <ProductImage
@@ -1468,8 +1466,9 @@ export default function ViewProducts() {
                           </div>
                         )}
                       </div>
-                      {/* Content */}
-                      <div className="p-4 flex flex-col gap-2 flex-1">
+
+                      {/* Content outside the image card - No background */}
+                      <div className="px-1 pt-4 flex flex-col gap-2">
                         <span
                           className="text-xs font-medium px-2 py-0.5 rounded-lg w-fit"
                           style={{
@@ -1504,7 +1503,7 @@ export default function ViewProducts() {
                             {product.description}
                           </p>
                         )}
-                        <div className="flex items-baseline gap-2 mt-auto pt-1">
+                        <div className="flex items-baseline gap-2 pt-1">
                           <p
                             className="text-base font-bold"
                             style={{ color: Colors.primary }}
@@ -1522,14 +1521,9 @@ export default function ViewProducts() {
                             )}
                         </div>
                       </div>
-                      {/* Actions */}
-                      <div
-                        className="px-4 pb-4 flex items-center gap-2 flex-wrap"
-                        style={{
-                          borderTop: `1px solid ${Colors.divider}`,
-                          paddingTop: 12,
-                        }}
-                      >
+
+                      {/* Action buttons outside the card */}
+                      <div className="px-1 pt-3 flex items-center gap-2 flex-wrap">
                         <button
                           onClick={() => setEditProduct(product)}
                           className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all duration-150"
