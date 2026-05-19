@@ -21,7 +21,6 @@ import {
   RotateCw,
   Crop,
   Check,
-  XCircle,
   Pencil,
 } from "lucide-react";
 import Colors from "../constants/colors";
