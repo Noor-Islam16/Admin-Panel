@@ -23,7 +23,8 @@ import {
 import Colors from "../constants/colors";
 
 // ─── API Base URL ────────────────────────────────────────────────────────────
-const API_BASE = "https://customer-7bcb.onrender.com";
+// const API_BASE = "https://customer-7bcb.onrender.com";
+const API_BASE = "https://customer-xnab.onrender.com";
 // const API_BASE = "http://localhost:5000";
 // ─── Types matching backend ──────────────────────────────────────────────────
 interface OrderItemImage {
