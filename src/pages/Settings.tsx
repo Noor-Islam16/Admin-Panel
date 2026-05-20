@@ -1469,7 +1469,7 @@ export default function SettingsPage() {
                 >
                   <option value="">No specific screen</option>
                   <option value="/(tabs)/home">Home Screen</option>
-                  <option value="/(tabs)/products">Products Screen</option>
+                  <option value="/products">Products Screen</option>
                   <option value="/(tabs)/myorders">My Orders</option>
                   <option value="/(tabs)/account">Account Screen</option>
                   <option value="/notifications">Notifcation Screen</option>
