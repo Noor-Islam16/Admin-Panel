@@ -693,7 +693,11 @@ export default function Orders() {
       setLoading(true);
       setError(null);
       const data = await fetchAllOrders({ limit: 100 });
-      setOrders(data.orders || []);
+      // ✅ Filter out orders with deleted customers
+      const validOrders = (data.orders || []).filter(
+        (order: Order) => order.customer,
+      );
+      setOrders(validOrders);
     } catch (err: any) {
       setError(err.message || "Failed to load orders");
     } finally {
@@ -704,6 +708,7 @@ export default function Orders() {
   useEffect(() => {
     loadOrders();
   }, [loadOrders]);
+
   useEffect(() => {
     const interval = setInterval(loadOrders, 30000);
     return () => clearInterval(interval);
@@ -1037,7 +1042,7 @@ export default function Orders() {
                 {filtered.length === 0 ? (
                   <tr>
                     <td colSpan={9} className="py-16 text-center">
-                      <ClipboardList size={36} color={Colors.border} />
+                      {/* <ClipboardList size={36} color={Colors.border} /> */}
                       <p
                         className="text-sm mt-2"
                         style={{ color: Colors.textMuted }}
