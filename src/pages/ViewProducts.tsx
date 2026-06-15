@@ -19,6 +19,7 @@ import {
   Smartphone,
   Boxes,
   Plus,
+  EyeOff,
 } from "lucide-react";
 import Colors from "../constants/colors";
 import { CATEGORIES } from "../constants/products";
@@ -291,6 +292,62 @@ function Spinner() {
   );
 }
 
+// ── Toggle Switch ─────────────────────────────────────────────────────────────
+function ToggleSwitch({
+  active,
+  onToggle,
+  loading,
+}: {
+  active: boolean;
+  onToggle: () => void;
+  loading?: boolean;
+}) {
+  return (
+    <button
+      onClick={onToggle}
+      disabled={loading}
+      className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all duration-150"
+      style={{
+        background: active ? `${Colors.success}18` : "#FFF0F3",
+        color: active ? Colors.success : Colors.error,
+        border: `1px solid ${active ? `${Colors.success}40` : "#FFD0DA"}`,
+        opacity: loading ? 0.6 : 1,
+        cursor: loading ? "not-allowed" : "pointer",
+        minWidth: 90,
+      }}
+      title={active ? "Click to deactivate" : "Click to activate"}
+    >
+      {/* Track */}
+      <div
+        style={{
+          width: 28,
+          height: 16,
+          borderRadius: 8,
+          background: active ? Colors.success : Colors.error,
+          position: "relative",
+          flexShrink: 0,
+          transition: "background 0.2s",
+        }}
+      >
+        <div
+          style={{
+            width: 12,
+            height: 12,
+            borderRadius: "50%",
+            background: Colors.white,
+            position: "absolute",
+            top: 2,
+            left: active ? 14 : 2,
+            transition: "left 0.2s",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.25)",
+          }}
+        />
+      </div>
+      {active ? "Active" : "Inactive"}
+    </button>
+  );
+}
+
 function SkeletonCard() {
   return (
     <div
@@ -337,7 +394,7 @@ function SkeletonRow() {
   );
 }
 
-// ── Edit Modal (FULLY FIXED with Image Management) ────────────────────────────
+// ── Edit Modal ────────────────────────────────────────────────────────────────
 function EditModal({
   product,
   onSave,
@@ -357,24 +414,22 @@ function EditModal({
     stockQuantity: String(product.stockQuantity),
     minOrderQuantity: String(product.minOrderQuantity),
     maxOrderQuantity:
-      product.maxOrderQuantity != null ? String(product.maxOrderQuantity) : "", // ✅ NEW
+      product.maxOrderQuantity != null ? String(product.maxOrderQuantity) : "",
     description: product.description ?? "",
   });
   const [focused, setFocused] = useState("");
   const [saving, setSaving] = useState(false);
 
-  // Image management - use a single source of truth
   const [allImages, setAllImages] = useState<
     Array<{
-      id: string; // unique identifier
-      url: string; // display URL
-      publicId?: string; // Cloudinary public ID (only for existing)
+      id: string;
+      url: string;
+      publicId?: string;
       isPrimary: boolean;
-      isNew: boolean; // true if newly added file
-      file?: File; // the actual File object for new images
+      isNew: boolean;
+      file?: File;
     }>
   >(() => {
-    // Initialize from existing product images
     return (product.images || []).map((img, index) => ({
       id: img.publicId || `existing-${index}`,
       url: img.url,
@@ -390,7 +445,6 @@ function EditModal({
   const set = (key: keyof typeof form, val: string) =>
     setForm((prev) => ({ ...prev, [key]: val }));
 
-  // ── Add new images ───────────────────────────────────────────────────────
   const handleAddImages = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
@@ -404,22 +458,19 @@ function EditModal({
     const newImages = files.map((file, index) => ({
       id: `new-${Date.now()}-${index}`,
       url: URL.createObjectURL(file),
-      isPrimary: allImages.length === 0 && deletedPublicIds.length === 0, // First image if no others
+      isPrimary: allImages.length === 0 && deletedPublicIds.length === 0,
       isNew: true,
       file: file,
     }));
 
     setAllImages((prev) => [...prev, ...newImages]);
-    // Reset input
     if (imageRef.current) imageRef.current.value = "";
   };
 
-  // ── Remove an image ─────────────────────────────────────────────────────
   const handleRemoveImage = (imageId: string) => {
     const image = allImages.find((img) => img.id === imageId);
     if (!image) return;
 
-    // Check if we'd have at least 1 image remaining
     const remainingCount = allImages.filter(
       (img) =>
         img.id !== imageId && !deletedPublicIds.includes(img.publicId || ""),
@@ -431,18 +482,14 @@ function EditModal({
     }
 
     if (image.isNew) {
-      // Revoke object URL to prevent memory leak
       if (image.url.startsWith("blob:")) {
         URL.revokeObjectURL(image.url);
       }
-      // Remove from allImages
       setAllImages((prev) => prev.filter((img) => img.id !== imageId));
     } else if (image.publicId) {
-      // Mark for deletion
       setDeletedPublicIds((prev) => [...prev, image.publicId!]);
     }
 
-    // If removed image was primary, set first remaining as primary
     if (image.isPrimary) {
       setAllImages((prev) => {
         const remaining = prev.filter(
@@ -451,7 +498,6 @@ function EditModal({
             (!image.publicId || !deletedPublicIds.includes(image.publicId)),
         );
         if (remaining.length > 0 && !image.isNew) {
-          // Find first non-deleted image to make primary
           const newPrimary = prev.find(
             (img) =>
               img.id !== imageId &&
@@ -469,7 +515,6 @@ function EditModal({
     }
   };
 
-  // ── Set image as primary ────────────────────────────────────────────────
   const handleSetPrimary = (imageId: string) => {
     setAllImages((prev) =>
       prev.map((img) => ({
@@ -479,7 +524,6 @@ function EditModal({
     );
   };
 
-  // ── Save ─────────────────────────────────────────────────────────────────
   const handleSave = async () => {
     if (!form.name.trim()) return;
     setSaving(true);
@@ -491,18 +535,16 @@ function EditModal({
       fd.append("stockQuantity", form.stockQuantity);
       fd.append("minOrderQuantity", form.minOrderQuantity);
       if (form.maxOrderQuantity)
-        fd.append("maxOrderQuantity", form.maxOrderQuantity); // ✅ NEW
+        fd.append("maxOrderQuantity", form.maxOrderQuantity);
       if (form.brand.trim()) fd.append("brand", form.brand.trim());
       if (form.originalPrice) fd.append("originalPrice", form.originalPrice);
       if (form.description.trim())
         fd.append("description", form.description.trim());
 
-      // Send deleted image IDs
       if (deletedPublicIds.length > 0) {
         fd.append("deletedImages", JSON.stringify(deletedPublicIds));
       }
 
-      // Send updated primary image info for existing images
       const existingPrimary = allImages.find(
         (img) => !img.isNew && img.isPrimary,
       );
@@ -510,19 +552,16 @@ function EditModal({
         fd.append("primaryImageId", existingPrimary.publicId);
       }
 
-      // Send existing images order (for reordering if needed)
       const existingImageIds = allImages
         .filter((img) => !img.isNew && img.publicId)
         .map((img) => img.publicId);
       fd.append("imageOrder", JSON.stringify(existingImageIds));
 
-      // Append new image files
       const newFiles = allImages.filter((img) => img.isNew && img.file);
-      newFiles.forEach((img, _index) => {
+      newFiles.forEach((img) => {
         fd.append("images", img.file!, img.file!.name);
       });
 
-      // If first new image should be primary
       if (newFiles.length > 0) {
         const hasExistingImages = allImages.some(
           (img) => !img.isNew && !deletedPublicIds.includes(img.publicId || ""),
@@ -545,7 +584,6 @@ function EditModal({
     "w-full bg-transparent pl-10 pr-4 py-3 text-sm outline-none";
   const inputStyle = { color: Colors.textPrimary };
 
-  // Get visible images
   const visibleImages = allImages.filter(
     (img) => img.isNew || !deletedPublicIds.includes(img.publicId || ""),
   );
@@ -588,7 +626,7 @@ function EditModal({
         </div>
 
         <div className="p-6 flex flex-col gap-4">
-          {/* ═══ IMAGE MANAGEMENT ═══ */}
+          {/* IMAGE MANAGEMENT */}
           <div
             className="rounded-2xl p-4"
             style={{
@@ -627,7 +665,6 @@ function EditModal({
               <div className="grid grid-cols-4 gap-3">
                 {visibleImages.map((img) => (
                   <div key={img.id} className="relative group">
-                    {/* Image container */}
                     <div
                       className="relative rounded-xl overflow-hidden aspect-square cursor-pointer transition-all duration-200"
                       style={{
@@ -640,16 +677,13 @@ function EditModal({
                     >
                       <img
                         src={img.url}
-                        alt={`Product image`}
+                        alt="Product image"
                         className="w-full h-full object-cover"
                         onError={(e) => {
-                          // Fallback for broken images
                           (e.target as HTMLImageElement).src =
                             "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Crect fill='%23ddd' width='100' height='100'/%3E%3Ctext x='50' y='55' text-anchor='middle' fill='%23999' font-size='12'%3ENo Img%3C/text%3E%3C/svg%3E";
                         }}
                       />
-
-                      {/* Badges */}
                       {img.isPrimary && (
                         <span
                           className="absolute top-1 left-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold"
@@ -672,16 +706,12 @@ function EditModal({
                           New
                         </span>
                       )}
-
-                      {/* Hover overlay */}
                       <div className="absolute inset-0 bg-black/10 group-hover:bg-opacity-30 transition-all duration-200 flex items-center justify-center">
                         <span className="text-white text-[10px] font-semibold opacity-0 group-hover:opacity-100 transition-opacity duration-200 text-center px-1">
                           {img.isPrimary ? "Primary Image" : "Set as Primary"}
                         </span>
                       </div>
                     </div>
-
-                    {/* Remove button */}
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -713,11 +743,7 @@ function EditModal({
                   e.currentTarget.style.background = Colors.surface;
                 }}
               >
-                <ImageOff
-                  size={28}
-                  color={Colors.textMuted}
-                  strokeWidth={1.5}
-                />
+                <ImageOff size={28} color={Colors.textMuted} strokeWidth={1.5} />
                 <span
                   className="text-xs font-semibold"
                   style={{ color: Colors.textMuted }}
@@ -736,7 +762,6 @@ function EditModal({
             </p>
           </div>
 
-          {/* ═══ PRODUCT DETAILS ═══ */}
           {/* Name + Brand */}
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
@@ -813,10 +838,7 @@ function EditModal({
             </div>
             <div className="flex flex-col gap-1.5">
               <FieldLabel>Original Price (₹)</FieldLabel>
-              <InputBox
-                focused={focused === "originalPrice"}
-                icon={IndianRupee}
-              >
+              <InputBox focused={focused === "originalPrice"} icon={IndianRupee}>
                 <input
                   className={inputClass}
                   style={inputStyle}
@@ -865,7 +887,7 @@ function EditModal({
             </div>
           </div>
 
-          {/* ✅ Max Order Qty */}
+          {/* Max Order Qty */}
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <FieldLabel>Max Order Quantity</FieldLabel>
@@ -883,7 +905,7 @@ function EditModal({
                 />
               </InputBox>
             </div>
-            <div /> {/* Spacer */}
+            <div />
           </div>
 
           {/* Description */}
@@ -995,6 +1017,10 @@ export default function ViewProducts() {
   const [stockFilter, setStockFilter] = useState("All");
   const [brandFilter] = useState("");
 
+  // ── New: show inactive toggle & toggling state ────────────────────────────
+  const [showInactive, setShowInactive] = useState(false);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+
   const [editProduct, setEditProduct] = useState<ApiProduct | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ApiProduct | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -1020,14 +1046,6 @@ export default function ViewProducts() {
     setTimeout(() => setToast(null), 3000);
   };
 
-  // const markPending = (id: string) => setPendingOps((s) => new Set(s).add(id));
-  // const clearPending = (id: string) =>
-  //   setPendingOps((s) => {
-  //     const n = new Set(s);
-  //     n.delete(id);
-  //     return n;
-  //   });
-
   useEffect(() => {
     if (searchTimer.current) clearTimeout(searchTimer.current);
     searchTimer.current = setTimeout(() => setDebouncedSearch(search), 420);
@@ -1050,6 +1068,9 @@ export default function ViewProducts() {
         if (stockFilter === "Fast Moving") params.fastMoving = "true";
         if (stockFilter === "Featured") params.featured = "true";
         if (brandFilter) params.brand = brandFilter;
+
+        // Pass isActive filter — omit param when showInactive to get all
+        if (!showInactive) params.isActive = "true";
 
         const res = await ProductAPI.getAll(params);
         const { products: raw, pagination } = res.data;
@@ -1076,12 +1097,13 @@ export default function ViewProducts() {
         setLoading(false);
       }
     },
-    [categoryFilter, debouncedSearch, stockFilter, brandFilter],
+    [categoryFilter, debouncedSearch, stockFilter, brandFilter, showInactive],
   );
 
   useEffect(() => {
     fetchProducts(1);
   }, [fetchProducts]);
+
   useEffect(() => {
     StockAPI.getStats()
       .then((r) => setStats(r.data))
@@ -1109,6 +1131,27 @@ export default function ViewProducts() {
       showToast("error", e instanceof Error ? e.message : "Delete failed.");
     } finally {
       setDeleting(false);
+    }
+  };
+
+  // ── New: toggle active/inactive ───────────────────────────────────────────
+  const handleToggleStatus = async (product: ApiProduct) => {
+    setTogglingId(product._id);
+    try {
+      await ProductAPI.toggleStatus(product._id, !product.isActive);
+      setProducts((prev) =>
+        prev.map((p) =>
+          p._id === product._id ? { ...p, isActive: !p.isActive } : p,
+        ),
+      );
+      showToast(
+        "success",
+        `"${product.name}" ${!product.isActive ? "activated" : "deactivated"}.`,
+      );
+    } catch (e) {
+      showToast("error", e instanceof Error ? e.message : "Toggle failed.");
+    } finally {
+      setTogglingId(null);
     }
   };
 
@@ -1267,6 +1310,7 @@ export default function ViewProducts() {
 
         {/* Filters Row */}
         <div className="flex flex-wrap gap-3 items-center">
+          {/* Search */}
           <div className="relative flex-1 min-w-52">
             <div
               className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"
@@ -1293,6 +1337,8 @@ export default function ViewProducts() {
               }}
             />
           </div>
+
+          {/* Category filter */}
           <div className="relative">
             <Filter
               size={15}
@@ -1324,6 +1370,8 @@ export default function ViewProducts() {
               className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none"
             />
           </div>
+
+          {/* Stock filter */}
           <div className="relative">
             <Package
               size={15}
@@ -1352,9 +1400,49 @@ export default function ViewProducts() {
               className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none"
             />
           </div>
+
+          {/* Show Inactive toggle */}
+          <button
+            onClick={() => setShowInactive((v) => !v)}
+            className="flex items-center gap-2 px-3 py-2.5 rounded-2xl text-sm font-semibold transition-all duration-200"
+            style={{
+              background: showInactive ? "#FFF0F3" : Colors.surface,
+              border: `1.5px solid ${showInactive ? "#FFD0DA" : Colors.border}`,
+              color: showInactive ? Colors.error : Colors.textSecondary,
+            }}
+          >
+            <EyeOff size={15} strokeWidth={2} />
+            {/* Track */}
+            <div
+              style={{
+                width: 28,
+                height: 16,
+                borderRadius: 8,
+                background: showInactive ? Colors.error : Colors.border,
+                position: "relative",
+                flexShrink: 0,
+                transition: "background 0.2s",
+              }}
+            >
+              <div
+                style={{
+                  width: 12,
+                  height: 12,
+                  borderRadius: "50%",
+                  background: Colors.white,
+                  position: "absolute",
+                  top: 2,
+                  left: showInactive ? 14 : 2,
+                  transition: "left 0.2s",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+                }}
+              />
+            </div>
+            Show inactive
+          </button>
         </div>
 
-        {(search || categoryFilter !== "all" || stockFilter !== "All") && (
+        {(search || categoryFilter !== "all" || stockFilter !== "All" || showInactive) && (
           <p className="text-xs" style={{ color: Colors.textMuted }}>
             Showing{" "}
             <span
@@ -1364,6 +1452,14 @@ export default function ViewProducts() {
               {products.length}
             </span>{" "}
             of {totalCount} products
+            {showInactive && (
+              <span
+                className="ml-2 px-2 py-0.5 rounded-lg text-[10px] font-semibold"
+                style={{ background: "#FFF0F3", color: Colors.error }}
+              >
+                Including inactive
+              </span>
+            )}
           </p>
         )}
 
@@ -1386,7 +1482,7 @@ export default function ViewProducts() {
           </div>
         )}
 
-        {/* Grid View */}
+        {/* ── Grid View ── */}
         {view === "grid" && (
           <>
             {loading ? (
@@ -1408,16 +1504,16 @@ export default function ViewProducts() {
                       key={product._id}
                       className="flex flex-col transition-all duration-200 group"
                       style={{
-                        opacity: isPending ? 0.75 : 1,
+                        opacity: isPending || !product.isActive ? 0.65 : 1,
                       }}
                     >
-                      {/* Image Card Wrapper - Increased height */}
+                      {/* Image Card */}
                       <div
                         className="relative rounded-3xl overflow-hidden transition-all duration-200"
                         style={{
-                          height: 320, // Increased height from 200 to 320
+                          height: 320,
                           background: Colors.surfaceAlt,
-                          border: `1px solid ${Colors.border}`,
+                          border: `1px solid ${!product.isActive ? Colors.error + "60" : Colors.border}`,
                           boxShadow: `0 2px 12px ${Colors.shadow}`,
                         }}
                         onMouseEnter={(e) => {
@@ -1434,7 +1530,22 @@ export default function ViewProducts() {
                           name={product.name}
                           fill={true}
                         />
-                        {discount && (
+
+                        {/* Inactive overlay banner */}
+                        {!product.isActive && (
+                          <div
+                            className="absolute top-3 left-3 flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-bold z-10"
+                            style={{
+                              background: Colors.error,
+                              color: Colors.white,
+                            }}
+                          >
+                            <EyeOff size={11} strokeWidth={2.5} />
+                            Inactive
+                          </div>
+                        )}
+
+                        {discount && product.isActive && (
                           <div
                             className="absolute top-3 left-3 px-2 py-0.5 rounded-lg text-xs font-bold z-10"
                             style={{
@@ -1445,6 +1556,7 @@ export default function ViewProducts() {
                             -{discount}%
                           </div>
                         )}
+
                         <div
                           className="absolute top-3 right-3 px-2.5 py-1 rounded-xl text-xs font-semibold z-10"
                           style={{
@@ -1454,6 +1566,7 @@ export default function ViewProducts() {
                         >
                           {stock.label}
                         </div>
+
                         {product.images && product.images.length > 1 && (
                           <div
                             className="absolute bottom-3 right-3 z-10 px-2 py-0.5 rounded-lg text-xs font-semibold"
@@ -1467,7 +1580,7 @@ export default function ViewProducts() {
                         )}
                       </div>
 
-                      {/* Content outside the image card - No background */}
+                      {/* Content below image */}
                       <div className="px-1 pt-4 flex flex-col gap-2">
                         <span
                           className="text-xs font-medium px-2 py-0.5 rounded-lg w-fit"
@@ -1522,7 +1635,7 @@ export default function ViewProducts() {
                         </div>
                       </div>
 
-                      {/* Action buttons outside the card */}
+                      {/* Action buttons */}
                       <div className="px-1 pt-3 flex items-center gap-2 flex-wrap">
                         <button
                           onClick={() => setEditProduct(product)}
@@ -1562,6 +1675,13 @@ export default function ViewProducts() {
                         >
                           <Trash2 size={14} strokeWidth={2} />
                         </button>
+
+                        {/* Active / Inactive toggle */}
+                        <ToggleSwitch
+                          active={product.isActive}
+                          onToggle={() => handleToggleStatus(product)}
+                          loading={togglingId === product._id}
+                        />
                       </div>
                     </div>
                   );
@@ -1571,7 +1691,7 @@ export default function ViewProducts() {
           </>
         )}
 
-        {/* Table View */}
+        {/* ── Table View ── */}
         {view === "table" && (
           <div
             className="rounded-3xl overflow-hidden"
@@ -1582,7 +1702,7 @@ export default function ViewProducts() {
             }}
           >
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[900px]">
+              <table className="w-full min-w-[960px]">
                 <thead>
                   <tr style={{ background: Colors.surfaceAlt }}>
                     {[
@@ -1592,6 +1712,7 @@ export default function ViewProducts() {
                       "Category",
                       "Price",
                       "Stock",
+                      "Status",
                       "Actions",
                     ].map((h) => (
                       <th
@@ -1611,7 +1732,7 @@ export default function ViewProducts() {
                     ))
                   ) : products.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="py-16 text-center">
+                      <td colSpan={8} className="py-16 text-center">
                         <EmptyState inline />
                       </td>
                     </tr>
@@ -1624,7 +1745,7 @@ export default function ViewProducts() {
                           key={product._id}
                           style={{
                             borderTop: `1px solid ${Colors.divider}`,
-                            opacity: isPending ? 0.7 : 1,
+                            opacity: isPending ? 0.7 : !product.isActive ? 0.65 : 1,
                           }}
                           onMouseEnter={(e) =>
                             (e.currentTarget.style.background =
@@ -1709,8 +1830,31 @@ export default function ViewProducts() {
                               {stock.label}
                             </span>
                           </td>
+
+                          {/* Status column */}
                           <td className="px-5 py-3.5">
-                            <div className="flex items-center gap-2">
+                            <span
+                              className="text-xs font-semibold px-2.5 py-1 rounded-xl whitespace-nowrap flex items-center gap-1 w-fit"
+                              style={{
+                                background: product.isActive
+                                  ? `${Colors.success}18`
+                                  : "#FFF0F3",
+                                color: product.isActive
+                                  ? Colors.success
+                                  : Colors.error,
+                              }}
+                            >
+                              {product.isActive ? (
+                                <CheckCircle2 size={11} strokeWidth={2.5} />
+                              ) : (
+                                <EyeOff size={11} strokeWidth={2.5} />
+                              )}
+                              {product.isActive ? "Active" : "Inactive"}
+                            </span>
+                          </td>
+
+                          <td className="px-5 py-3.5">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <button
                                 onClick={() => setEditProduct(product)}
                                 className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all duration-150"
@@ -1719,8 +1863,7 @@ export default function ViewProducts() {
                                   color: Colors.info,
                                 }}
                                 onMouseEnter={(e) => {
-                                  e.currentTarget.style.background =
-                                    Colors.info;
+                                  e.currentTarget.style.background = Colors.info;
                                   e.currentTarget.style.color = Colors.white;
                                 }}
                                 onMouseLeave={(e) => {
@@ -1738,8 +1881,7 @@ export default function ViewProducts() {
                                   color: Colors.error,
                                 }}
                                 onMouseEnter={(e) => {
-                                  e.currentTarget.style.background =
-                                    Colors.error;
+                                  e.currentTarget.style.background = Colors.error;
                                   e.currentTarget.style.color = Colors.white;
                                 }}
                                 onMouseLeave={(e) => {
@@ -1749,6 +1891,13 @@ export default function ViewProducts() {
                               >
                                 <Trash2 size={13} strokeWidth={2} /> Delete
                               </button>
+
+                              {/* Active / Inactive toggle */}
+                              <ToggleSwitch
+                                active={product.isActive}
+                                onToggle={() => handleToggleStatus(product)}
+                                loading={togglingId === product._id}
+                              />
                             </div>
                           </td>
                         </tr>
@@ -1758,6 +1907,7 @@ export default function ViewProducts() {
                 </tbody>
               </table>
             </div>
+
             {!loading && products.length > 0 && (
               <div
                 className="px-6 py-4 flex items-center justify-between flex-wrap gap-3"
@@ -1831,6 +1981,7 @@ export default function ViewProducts() {
           </div>
         )}
 
+        {/* Grid pagination */}
         {view === "grid" && !loading && totalPages > 1 && (
           <div className="flex items-center justify-center gap-2 pt-2">
             <button
