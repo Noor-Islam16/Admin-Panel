@@ -43,8 +43,8 @@ interface Customer {
 
 // ─── API Config ──────────────────────────────────────────────────────────────
 // const API_BASE = "https://customer-7bcb.onrender.com";
-// const API_BASE = "https://customer-xnab.onrender.com";
-const API_BASE = "http://localhost:5000";
+const API_BASE = "https://customer-xnab.onrender.com";
+// const API_BASE = "http://localhost:5000";
 
 const getAuthToken = (): string | null => {
   return localStorage.getItem("token") ?? localStorage.getItem("adminToken");
