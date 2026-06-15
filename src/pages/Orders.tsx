@@ -233,21 +233,29 @@ function buildWhatsAppMessage(order: Order): string {
   const customerName = getCustomerName(order);
   const customerPhone = getCustomerPhone(order);
   const customerAddress = getCustomerAddress(order);
+  const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+    customerAddress,
+  )}`;
 
   const lines = [
-    `📱 *Thump Beyond Limits - Order Details*`,
+    `\u{1F4F1} *Thump Beyond Limits - Order Details*`,
     ``,
-    `📋 *Order:* ${order.orderNumber}`,
-    `📅 *Date:* ${new Date(order.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`,
-    `📊 *Status:* ${order.status?.replace(/_/g, " ").toUpperCase()}`,
-    `💳 *Payment:* ${order.paymentMethod?.toUpperCase() || "UPI"} | ${order.paymentStatus?.toUpperCase() || "PENDING"}`,
+    `\u{1F4CB} *Order:* ${order.orderNumber}`,
+    `\u{1F4C5} *Date:* ${new Date(order.createdAt).toLocaleDateString("en-IN", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    })}`,
+    `\u{1F4CA} *Status:* ${order.status?.replace(/_/g, " ").toUpperCase()}`,
+    `\u{1F4B3} *Payment:* ${order.paymentMethod?.toUpperCase() || "UPI"} | ${order.paymentStatus?.toUpperCase() || "PENDING"}`,
     ``,
-    `👤 *Customer Details*`,
+    `\u{1F464} *Customer Details*`,
     `Name: ${customerName}`,
     `Phone: +91 ${customerPhone}`,
     `Address: ${customerAddress}`,
+    `\u{1F4CD} *Location on Map:* ${mapsUrl}`,
     ``,
-    `🛒 *Order Items (${order.items?.length || 0})*`,
+    `\u{1F6D2} *Order Items (${order.items?.length || 0})*`,
     ...order.items.map((item, idx) => {
       const details = [
         item.brand,
@@ -256,26 +264,26 @@ function buildWhatsAppMessage(order: Order): string {
         item.warranty && item.warranty !== "No Warranty" ? item.warranty : null,
       ]
         .filter(Boolean)
-        .join(" · ");
+        .join(" \u00B7 ");
       const itemName = details ? `${item.name} (${details})` : item.name;
       const originalPrice =
         item.originalPrice && item.originalPrice > item.sellingPrice
-          ? ` (MRP: ₹${item.originalPrice})`
+          ? ` (MRP: \u20B9${item.originalPrice})`
           : "";
-      return `${idx + 1}. ${itemName}\n   ₹${item.sellingPrice} × ${item.quantity} = ₹${item.lineTotal}${originalPrice}`;
+      return `${idx + 1}. ${itemName}\n   \u20B9${item.sellingPrice} \u00D7 ${item.quantity} = \u20B9${item.lineTotal}${originalPrice}`;
     }),
     ``,
-    `💰 *Bill Summary*`,
-    `Subtotal: ₹${order.subtotal?.toLocaleString("en-IN") || 0}`,
-    order.couponDiscount > 0 ? `Discount: -₹${order.couponDiscount}` : null,
-    `Delivery: ${order.deliveryCharge === 0 ? "FREE" : `₹${order.deliveryCharge}`}`,
-    `Platform Fee: ₹${order.platformFee || 0}`,
-    `GST: ₹${order.gst || 0}`,
-    order.deliveryTip > 0 ? `Delivery Tip: ₹${order.deliveryTip}` : null,
+    `\u{1F4B0} *Bill Summary*`,
+    `Subtotal: \u20B9${order.subtotal?.toLocaleString("en-IN") || 0}`,
+    order.couponDiscount > 0 ? `Discount: -\u20B9${order.couponDiscount}` : null,
+    `Delivery: ${order.deliveryCharge === 0 ? "FREE" : `\u20B9${order.deliveryCharge}`}`,
+    `Platform Fee: \u20B9${order.platformFee || 0}`,
+    `GST: \u20B9${order.gst || 0}`,
+    order.deliveryTip > 0 ? `Delivery Tip: \u20B9${order.deliveryTip}` : null,
     ``,
-    `💵 *Total Amount: ₹${order.totalAmount?.toLocaleString("en-IN") || 0}*`,
+    `\u{1F4B5} *Total Amount: \u20B9${order.totalAmount?.toLocaleString("en-IN") || 0}*`,
     ``,
-    `_Thank you for shopping with us! 🙏_`,
+    `_Thank you for shopping with us! \u{1F64F}_`,
   ].filter(Boolean);
 
   return encodeURIComponent(lines.join("\n"));
