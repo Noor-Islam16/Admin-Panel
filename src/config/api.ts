@@ -49,6 +49,7 @@ export interface ProductImage {
 export interface ApiProduct {
   _id: string;
   name: string;
+  sku?: string; // ✅ ADD THIS
   brand?: string;
   category: string;
   subCategory?: string;
@@ -183,6 +184,49 @@ export const ProductAPI = {
       method: "PATCH",
       body: JSON.stringify({ isActive }),
     }),
+
+  /** POST /api/products/bulk-update — multipart/form-data with csv/xlsx file */
+  bulkUpdate: (formData: FormData) =>
+    requestForm<{
+      success: boolean;
+      message: string;
+      data: {
+        totalRows: number;
+        updatedCount: number;
+        skippedCount: number;
+        failedCount: number;
+        skippedRows: { row: number; sku: string; reason: string }[];
+        failedRows: {
+          row: number;
+          data: Record<string, string>;
+          errors: unknown;
+        }[];
+      };
+    }>("/products/bulk-update", formData, "POST"),
+
+  /** POST /api/products/bulk-delete — multipart/form-data with csv/xlsx file */
+  bulkDelete: (formData: FormData) =>
+    requestForm<{
+      success: boolean;
+      message: string;
+      data: {
+        totalRows: number;
+        deletedCount: number;
+        notFoundCount: number;
+        failedCount: number;
+        notFoundRows: {
+          row: number;
+          name: string;
+          brand: string;
+          category: string;
+        }[];
+        failedRows: {
+          row: number;
+          data: Record<string, string>;
+          errors: unknown;
+        }[];
+      };
+    }>("/products/bulk-delete", formData, "POST"),
 };
 
 export const StockAPI = {

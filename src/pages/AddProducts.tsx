@@ -22,6 +22,8 @@ import {
   Crop,
   Check,
   Pencil,
+  RefreshCw,
+  FileX,
 } from "lucide-react";
 import Colors from "../constants/colors";
 import { CATEGORIES } from "../constants/products";
@@ -42,6 +44,7 @@ interface ProductForm {
 
 interface BulkRow {
   id: string;
+  sku: string;
   name: string;
   brand: string;
   category: string;
@@ -61,6 +64,8 @@ interface ImagePreview {
   preview: string;
   id: string;
 }
+
+type BulkOperation = "upload" | "update" | "delete";
 
 const EMPTY_FORM: ProductForm = {
   name: "",
@@ -150,16 +155,12 @@ function ImageEditorModal({
     canvas.width = img.naturalWidth;
     canvas.height = img.naturalHeight;
 
-    // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // Apply rotation
     ctx.save();
     ctx.translate(canvas.width / 2, canvas.height / 2);
     ctx.rotate((rotation * Math.PI) / 180);
     ctx.translate(-canvas.width / 2, -canvas.height / 2);
 
-    // Draw image with zoom
     const zoomFactor = zoom / 100;
     const drawWidth = canvas.width * zoomFactor;
     const drawHeight = canvas.height * zoomFactor;
@@ -168,7 +169,6 @@ function ImageEditorModal({
     ctx.drawImage(img, dx, dy, drawWidth, drawHeight);
     ctx.restore();
 
-    // Apply crop if in crop mode
     if (cropMode) {
       const cropX = (canvas.width * cropArea.x) / 100;
       const cropY = (canvas.height * cropArea.y) / 100;
@@ -204,7 +204,6 @@ function ImageEditorModal({
           boxShadow: "0 24px 64px rgba(0,0,0,0.22)",
         }}
       >
-        {/* Header */}
         <div
           className="flex items-center justify-between px-6 py-4"
           style={{
@@ -225,7 +224,6 @@ function ImageEditorModal({
         </div>
 
         <div className="p-6">
-          {/* Image Preview */}
           <div
             className="relative rounded-2xl overflow-hidden mb-4"
             style={{
@@ -251,8 +249,6 @@ function ImageEditorModal({
                 objectFit: "contain",
               }}
             />
-
-            {/* Crop overlay */}
             {cropMode && (
               <div
                 className="absolute border-2 border-white"
@@ -268,7 +264,6 @@ function ImageEditorModal({
             )}
           </div>
 
-          {/* Controls */}
           <div className="flex items-center gap-3 flex-wrap mb-4">
             <button
               onClick={handleRotate}
@@ -337,7 +332,6 @@ function ImageEditorModal({
             )}
           </div>
 
-          {/* Actions */}
           <div className="flex gap-3">
             <button
               onClick={onClose}
@@ -510,10 +504,11 @@ export default function AddProducts() {
   const imageInputRef = useRef<HTMLInputElement>(null);
 
   // Bulk
+  const [bulkOperation, setBulkOperation] = useState<BulkOperation>("upload");
   const [bulkRows, setBulkRows] = useState<BulkRow[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const [bulkSubmitting, setBulkSubmitting] = useState(false);
-  const [bulkUploadResult, setBulkUploadResult] = useState<any>(null);
+  const [bulkResult, setBulkResult] = useState<any>(null);
   const bulkFileRef = useRef<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -618,134 +613,160 @@ export default function AddProducts() {
     }
   };
 
-  // ── Parse uploaded file (CSV or Excel) ──────────────────────────────────────
-  const parseFile = useCallback((file: File) => {
-    const isExcel = file.name.endsWith(".xlsx") || file.name.endsWith(".xls");
-
-    if (isExcel) {
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        const data = new Uint8Array(ev.target?.result as ArrayBuffer);
-        const workbook = XLSX.read(data, { type: "array" });
-        const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const rawRows = XLSX.utils.sheet_to_json<Record<string, string>>(
-          sheet,
-          { defval: "", raw: false },
-        );
-        buildBulkRows(rawRows);
-      };
-      reader.readAsArrayBuffer(file);
-    } else {
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        const text = (ev.target?.result as string).replace(/^\uFEFF/, "");
-        const lines = text.trim().split(/\r?\n/);
-        if (lines.length < 2) return;
-
-        const firstLine = lines[0];
-        const delimiter =
-          (firstLine.match(/;/g) || []).length >
-          (firstLine.match(/,/g) || []).length
-            ? ";"
-            : ",";
-
-        const headers = firstLine
-          .split(delimiter)
-          .map((h) => h.trim().replace(/^"|"$/g, ""));
-        const rawRows = lines.slice(1).map((line) => {
-          const vals = line
-            .split(delimiter)
-            .map((v) => v.trim().replace(/^"|"$/g, ""));
-          const obj: Record<string, string> = {};
-          headers.forEach((h, i) => {
-            obj[h] = vals[i] ?? "";
-          });
-          return obj;
-        });
-        buildBulkRows(rawRows);
-      };
-      reader.readAsText(file);
-    }
-  }, []);
-
   // ── Build bulk rows from parsed data ────────────────────────────────────────
-  const buildBulkRows = useCallback((rawRows: Record<string, string>[]) => {
-    const rows: BulkRow[] = rawRows.map((raw, i) => {
-      // Normalize keys
-      const obj: Record<string, string> = {};
-      Object.keys(raw).forEach((key) => {
-        const normalized = key
-          .replace(/^\uFEFF/, "")
-          .trim()
-          .toLowerCase()
-          .replace(/\s+/g, "_")
-          .replace(/[^a-z0-9_]/g, "");
-        obj[normalized] = String(raw[key] ?? "")
-          .trim()
-          .replace(/^[₹$€£¥]+/, "")
-          .replace(/^"|"$/g, "");
-      });
-
-      // Normalize numeric fields — remove thousand separators
-      [
-        "price",
-        "original_price",
-        "stock",
-        "min_order_qty",
-        "max_order_qty",
-      ].forEach((f) => {
-        if (obj[f]) obj[f] = obj[f].replace(/,/g, "").replace(/\.0+$/, "");
-      });
-
-      // ✅ COLLECT IMAGES FROM image_1 through image_8 columns
-      const imageUrls: string[] = [];
-      for (let j = 1; j <= 8; j++) {
-        const url = obj[`image_${j}`];
-        if (url && url.trim()) {
-          imageUrls.push(url.trim());
-        }
-      }
-
-      // Also check old format image_urls column as fallback
-      if (imageUrls.length === 0 && obj["image_urls"]) {
-        obj["image_urls"].split(",").forEach((url: string) => {
-          const trimmed = url.trim();
-          if (trimmed) {
-            imageUrls.push(trimmed);
-          }
+  const buildBulkRows = useCallback(
+    (rawRows: Record<string, string>[], operation?: BulkOperation) => {
+      const op = operation || bulkOperation;
+      const rows: BulkRow[] = rawRows.map((raw, i) => {
+        const obj: Record<string, string> = {};
+        Object.keys(raw).forEach((key) => {
+          const normalized = key
+            .replace(/^\uFEFF/, "")
+            .trim()
+            .toLowerCase()
+            .replace(/\s+/g, "_")
+            .replace(/[^a-z0-9_]/g, "");
+          obj[normalized] = String(raw[key] ?? "")
+            .trim()
+            .replace(/^[₹$€£¥]+/, "")
+            .replace(/^"|"$/g, "");
         });
+
+        [
+          "price",
+          "original_price",
+          "stock",
+          "min_order_qty",
+          "max_order_qty",
+        ].forEach((f) => {
+          if (obj[f]) obj[f] = obj[f].replace(/,/g, "").replace(/\.0+$/, "");
+        });
+
+        const imageUrls: string[] = [];
+        for (let j = 1; j <= 8; j++) {
+          const url = obj[`image_${j}`];
+          if (url && url.trim()) {
+            imageUrls.push(url.trim());
+          }
+        }
+
+        if (imageUrls.length === 0 && obj["image_urls"]) {
+          obj["image_urls"].split(",").forEach((url: string) => {
+            const trimmed = url.trim();
+            if (trimmed) imageUrls.push(trimmed);
+          });
+        }
+
+        // Different validation based on operation
+        let hasError = false;
+        let errorMsg = "";
+
+        if (op === "delete") {
+          if (!obj["name"]) {
+            hasError = true;
+            errorMsg = "Name missing";
+          } else if (!obj["category"]) {
+            hasError = true;
+            errorMsg = "Category missing";
+          }
+        } else if (op === "update") {
+          if (!obj["sku"]) {
+            hasError = true;
+            errorMsg = "SKU required for update";
+          }
+        } else {
+          // upload
+          if (!obj["name"]) {
+            hasError = true;
+            errorMsg = "Name missing";
+          } else if (!obj["price"]) {
+            hasError = true;
+            errorMsg = "Price missing";
+          } else if (!obj["stock"]) {
+            hasError = true;
+            errorMsg = "Stock missing";
+          } else if (!obj["category"]) {
+            hasError = true;
+            errorMsg = "Category missing";
+          }
+        }
+
+        return {
+          id: String(i),
+          sku: obj["sku"] ?? "",
+          name: obj["name"] ?? "",
+          brand: obj["brand"] ?? "",
+          category: obj["category"] ?? "",
+          price: obj["price"] ?? "",
+          originalPrice: obj["original_price"] ?? "",
+          description: obj["description"] ?? "",
+          image_urls: imageUrls.join(","),
+          min_order_qty: obj["min_order_qty"] ?? "1",
+          max_order_qty: obj["max_order_qty"] ?? "",
+          stock: obj["stock"] ?? "",
+          status: hasError ? "error" : "valid",
+          error: hasError ? errorMsg : undefined,
+        };
+      });
+      setBulkRows(rows);
+      setBulkResult(null);
+    },
+    [bulkOperation],
+  );
+
+  // ── Parse uploaded file (CSV or Excel) ──────────────────────────────────────
+  const parseFile = useCallback(
+    (file: File) => {
+      const isExcel = file.name.endsWith(".xlsx") || file.name.endsWith(".xls");
+      const currentOp = bulkOperation; // ✅ Capture current operation
+
+      if (isExcel) {
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          const data = new Uint8Array(ev.target?.result as ArrayBuffer);
+          const workbook = XLSX.read(data, { type: "array" });
+          const sheet = workbook.Sheets[workbook.SheetNames[0]];
+          const rawRows = XLSX.utils.sheet_to_json<Record<string, string>>(
+            sheet,
+            { defval: "", raw: false },
+          );
+          buildBulkRows(rawRows, currentOp); // ✅ Pass operation
+        };
+        reader.readAsArrayBuffer(file);
+      } else {
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          const text = (ev.target?.result as string).replace(/^\uFEFF/, "");
+          const lines = text.trim().split(/\r?\n/);
+          if (lines.length < 2) return;
+
+          const firstLine = lines[0];
+          const delimiter =
+            (firstLine.match(/;/g) || []).length >
+            (firstLine.match(/,/g) || []).length
+              ? ";"
+              : ",";
+
+          const headers = firstLine
+            .split(delimiter)
+            .map((h) => h.trim().replace(/^"|"$/g, ""));
+          const rawRows = lines.slice(1).map((line) => {
+            const vals = line
+              .split(delimiter)
+              .map((v) => v.trim().replace(/^"|"$/g, ""));
+            const obj: Record<string, string> = {};
+            headers.forEach((h, i) => {
+              obj[h] = vals[i] ?? "";
+            });
+            return obj;
+          });
+          buildBulkRows(rawRows, currentOp); // ✅ Pass operation
+        };
+        reader.readAsText(file);
       }
-
-      const hasError =
-        !obj["name"] || !obj["price"] || !obj["stock"] || !obj["category"];
-
-      return {
-        id: String(i),
-        name: obj["name"] ?? "",
-        brand: obj["brand"] ?? "",
-        category: obj["category"] ?? "",
-        price: obj["price"] ?? "",
-        originalPrice: obj["original_price"] ?? "",
-        description: obj["description"] ?? "",
-        image_urls: imageUrls.join(","),
-        min_order_qty: obj["min_order_qty"] ?? "1",
-        max_order_qty: obj["max_order_qty"] ?? "",
-        stock: obj["stock"] ?? "",
-        status: hasError ? "error" : "valid",
-        error: hasError
-          ? !obj["name"]
-            ? "Name missing"
-            : !obj["price"]
-              ? "Price missing"
-              : !obj["stock"]
-                ? "Stock missing"
-                : "Category missing"
-          : undefined,
-      };
-    });
-    setBulkRows(rows);
-    setBulkUploadResult(null);
-  }, []);
+    },
+    [bulkOperation, buildBulkRows],
+  ); // ✅ Add buildBulkRows to deps
 
   const handleFileDrop = useCallback(
     (e: React.DragEvent) => {
@@ -774,10 +795,9 @@ export default function AddProducts() {
     setBulkRows((prev) => {
       const updatedRows = prev.filter((r) => r.id !== id);
 
-      // ✅ FIX: Update the file reference with only remaining rows
       if (updatedRows.length > 0 && bulkFileRef.current) {
-        // Create a new CSV file with only the remaining rows
         const headers = [
+          "sku",
           "name",
           "brand",
           "category",
@@ -798,6 +818,7 @@ export default function AddProducts() {
         ];
 
         const rows = updatedRows.map((row) => [
+          row.sku,
           row.name,
           row.brand,
           row.category,
@@ -829,11 +850,12 @@ export default function AddProducts() {
     });
   };
 
-  // ── Bulk Submit (sends the file directly to backend) ────────────────────────
+  // ── Bulk Submit ────────────────────────────────────────────────────────────
+  // ── Bulk Submit ────────────────────────────────────────────────────────────
   const handleBulkSubmit = async () => {
     const validCount = bulkRows.filter((r) => r.status === "valid").length;
     if (!validCount) {
-      showToast("error", "No valid rows to upload.");
+      showToast("error", "No valid rows to process.");
       return;
     }
     if (!bulkFileRef.current) {
@@ -842,35 +864,86 @@ export default function AddProducts() {
     }
 
     setBulkSubmitting(true);
-    setBulkUploadResult(null);
+    setBulkResult(null);
     try {
       const fd = new FormData();
       fd.append("file", bulkFileRef.current);
 
-      const res = await ProductAPI.bulkUpload(fd);
-      const { successCount, failedCount, failedRows } = res.data;
+      let res: any;
 
-      setBulkUploadResult({ successCount, failedCount, failedRows });
-
-      if (failedCount === 0) {
-        showToast(
-          "success",
-          `All ${successCount} products uploaded successfully!`,
-        );
-        setBulkRows([]);
-        bulkFileRef.current = null;
-      } else if (successCount > 0) {
-        showToast(
-          "success",
-          `${successCount} uploaded, ${failedCount} failed — see details below.`,
-        );
+      if (bulkOperation === "update") {
+        res = await ProductAPI.bulkUpdate(fd);
+      } else if (bulkOperation === "delete") {
+        res = await ProductAPI.bulkDelete(fd);
       } else {
-        showToast("error", `All ${failedCount} rows failed validation.`);
+        res = await ProductAPI.bulkUpload(fd);
       }
+
+      const data = res.data;
+
+      if (bulkOperation === "delete") {
+        const { deletedCount, notFoundCount, failedCount } = data;
+        setBulkResult({ deletedCount, notFoundCount, failedCount, ...data });
+
+        if (failedCount === 0 && notFoundCount === 0) {
+          showToast(
+            "success",
+            `All ${deletedCount} products deleted successfully!`,
+          );
+        } else if (deletedCount > 0) {
+          showToast(
+            "success",
+            `${deletedCount} deleted, ${notFoundCount} not found, ${failedCount} failed.`,
+          );
+        } else {
+          showToast("error", `No products deleted.`);
+        }
+      } else if (bulkOperation === "update") {
+        const { updatedCount, skippedCount, failedCount } = data;
+        setBulkResult({ updatedCount, skippedCount, failedCount, ...data });
+
+        if (failedCount === 0 && skippedCount === 0) {
+          showToast(
+            "success",
+            `All ${updatedCount} products updated successfully!`,
+          );
+        } else if (updatedCount > 0) {
+          showToast(
+            "success",
+            `${updatedCount} updated, ${skippedCount} skipped, ${failedCount} failed.`,
+          );
+        } else {
+          showToast("error", `All rows failed. No products updated.`);
+        }
+      } else {
+        // upload
+        const { successCount, failedCount } = data;
+        setBulkResult({ successCount, failedCount, ...data });
+
+        if (failedCount === 0) {
+          showToast(
+            "success",
+            `All ${successCount} products uploaded successfully!`,
+          );
+        } else if (successCount > 0) {
+          showToast(
+            "success",
+            `${successCount} uploaded, ${failedCount} failed — see details below.`,
+          );
+        } else {
+          showToast("error", `All ${failedCount} rows failed validation.`);
+        }
+      }
+
+      // ✅ CLEAR TABLE & FILE AFTER ANY SUCCESSFUL OPERATION
+      // Only keep the result summary visible
+      setBulkRows([]);
+      bulkFileRef.current = null;
+      if (fileInputRef.current) fileInputRef.current.value = "";
     } catch (e) {
       showToast(
         "error",
-        e instanceof Error ? e.message : "Bulk upload failed.",
+        e instanceof Error ? e.message : `${bulkOperation} operation failed.`,
       );
     } finally {
       setBulkSubmitting(false);
@@ -880,6 +953,7 @@ export default function AddProducts() {
   // ── Download Template ───────────────────────────────────────────────────────
   const downloadTemplate = () => {
     const headers = [
+      "sku",
       "name",
       "brand",
       "category",
@@ -900,6 +974,7 @@ export default function AddProducts() {
     ];
     const rows = [
       [
+        "THUMP-001",
         "USB-C Fast Charging Cable",
         "Anker",
         "charging-cables",
@@ -919,6 +994,7 @@ export default function AddProducts() {
         "",
       ],
       [
+        "THUMP-002",
         "Wireless Bluetooth Earbuds",
         "boAt",
         "headphones-earphones",
@@ -938,6 +1014,7 @@ export default function AddProducts() {
         "",
       ],
       [
+        "THUMP-003",
         "20W PD Wall Charger",
         "Spigen",
         "chargers-adapters",
@@ -970,6 +1047,211 @@ export default function AddProducts() {
     a.click();
     URL.revokeObjectURL(url);
   };
+
+  // ── Delete template ─────────────────────────────────────────────────────────
+  const downloadDeleteTemplate = () => {
+    const headers = ["name", "brand", "category"];
+    const rows = [
+      ["USB-C Fast Charging Cable", "Anker", "charging-cables"],
+      ["Wireless Bluetooth Earbuds", "boAt", "headphones-earphones"],
+      ["20W PD Wall Charger", "Spigen", "chargers-adapters"],
+    ];
+
+    const csv = [headers, ...rows]
+      .map((row) => row.map((cell) => `"${cell}"`).join(","))
+      .join("\n");
+
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "electronics_delete_template.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // ── Get submit button text and icon ─────────────────────────────────────────
+  const getSubmitConfig = () => {
+    const validCount = bulkRows.filter((r) => r.status === "valid").length;
+    switch (bulkOperation) {
+      case "update":
+        return {
+          label: `Update ${validCount} Products`,
+          icon: RefreshCw,
+          buttonBg: `linear-gradient(135deg, ${Colors.warning}, #f59e0b)`,
+        };
+      case "delete":
+        return {
+          label: `Delete ${validCount} Products`,
+          icon: FileX,
+          buttonBg: `linear-gradient(135deg, ${Colors.error}, #dc2626)`,
+        };
+      default:
+        return {
+          label: `Upload ${validCount} Valid Products`,
+          icon: Upload,
+          buttonBg: `linear-gradient(135deg, ${Colors.gradientStart}, ${Colors.gradientEnd})`,
+        };
+    }
+  };
+
+  // ── Get operation-specific description ──────────────────────────────────────
+  const getOperationDescription = () => {
+    switch (bulkOperation) {
+      case "update":
+        return (
+          <>
+            <strong>Column required: sku</strong> (unique product identifier).
+            Only columns with values will be updated — empty cells are ignored.
+            <br />
+            <strong>Update Flow:</strong> Upload sheet → match by SKU → update
+            changed fields only.
+          </>
+        );
+      case "delete":
+        return (
+          <>
+            <strong>Columns required: name, category</strong>. Brand is
+            optional. Products matching name + category (case-insensitive) will
+            be permanently deleted.
+            <br />
+            <strong style={{ color: Colors.error }}>
+              ⚠️ Warning: This permanently deletes products and their Cloudinary
+              images.
+            </strong>
+          </>
+        );
+      default:
+        return (
+          <>
+            Download CSV template → fill products with{" "}
+            <strong>image URLs in separate columns (image_1 to image_8)</strong>{" "}
+            → upload.
+            <br />
+            Required: <strong>name</strong>, <strong>category</strong>,{" "}
+            <strong>price</strong>, <strong>stock</strong>.
+          </>
+        );
+    }
+  };
+
+  // ── Get result summary ──────────────────────────────────────────────────────
+  const getResultSummary = () => {
+    if (!bulkResult) return null;
+
+    if (bulkOperation === "update") {
+      return (
+        <div
+          className="rounded-2xl p-4 flex flex-col gap-2"
+          style={{ background: "#FFFBF0", border: `1px solid #FDE68A` }}
+        >
+          <p className="text-sm font-bold" style={{ color: Colors.warning }}>
+            📝 Update Summary
+          </p>
+          <div
+            className="flex gap-4 text-xs"
+            style={{ color: Colors.textSecondary }}
+          >
+            <span>✅ {bulkResult.updatedCount} updated</span>
+            <span>⏭️ {bulkResult.skippedCount} skipped</span>
+            <span>❌ {bulkResult.failedCount} failed</span>
+          </div>
+          {bulkResult.skippedRows?.length > 0 && (
+            <div className="flex flex-col gap-1 max-h-32 overflow-y-auto">
+              {bulkResult.skippedRows.slice(0, 10).map((sr: any, i: number) => (
+                <p
+                  key={i}
+                  className="text-xs"
+                  style={{ color: Colors.textMuted }}
+                >
+                  Row {sr.row}: {sr.reason} (SKU: {sr.sku})
+                </p>
+              ))}
+            </div>
+          )}
+          {bulkResult.failedRows?.length > 0 && (
+            <div className="flex flex-col gap-1 max-h-32 overflow-y-auto">
+              {bulkResult.failedRows.slice(0, 10).map((fr: any, i: number) => (
+                <p key={i} className="text-xs" style={{ color: Colors.error }}>
+                  Row {fr.row}: {JSON.stringify(fr.errors)}
+                </p>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    if (bulkOperation === "delete") {
+      return (
+        <div
+          className="rounded-2xl p-4 flex flex-col gap-2"
+          style={{ background: "#FFF5F6", border: `1px solid #FFD0DA` }}
+        >
+          <p className="text-sm font-bold" style={{ color: Colors.error }}>
+            🗑️ Delete Summary
+          </p>
+          <div
+            className="flex gap-4 text-xs"
+            style={{ color: Colors.textSecondary }}
+          >
+            <span>✅ {bulkResult.deletedCount} deleted</span>
+            <span>🔍 {bulkResult.notFoundCount} not found</span>
+            <span>❌ {bulkResult.failedCount} failed</span>
+          </div>
+          {bulkResult.notFoundRows?.length > 0 && (
+            <div className="flex flex-col gap-1 max-h-32 overflow-y-auto">
+              {bulkResult.notFoundRows
+                .slice(0, 10)
+                .map((nf: any, i: number) => (
+                  <p
+                    key={i}
+                    className="text-xs"
+                    style={{ color: Colors.textMuted }}
+                  >
+                    Row {nf.row}: {nf.name} ({nf.brand || "no brand"},{" "}
+                    {nf.category}) — not found
+                  </p>
+                ))}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // upload
+    if (bulkResult?.failedCount > 0) {
+      return (
+        <div
+          className="rounded-2xl p-4 flex flex-col gap-2"
+          style={{ background: "#FFF5F6", border: `1px solid #FFD0DA` }}
+        >
+          <p className="text-sm font-bold" style={{ color: Colors.error }}>
+            ⚠️ {bulkResult.failedCount} row
+            {bulkResult.failedCount > 1 ? "s" : ""} failed on server
+          </p>
+          <div className="flex flex-col gap-1 max-h-40 overflow-y-auto">
+            {bulkResult.failedRows?.map((fr: any, i: number) => (
+              <p
+                key={i}
+                className="text-xs"
+                style={{ color: Colors.textSecondary }}
+              >
+                Row {fr.row}:{" "}
+                {typeof fr.errors === "object"
+                  ? JSON.stringify(fr.errors)
+                  : fr.errors}
+              </p>
+            ))}
+          </div>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  const submitConfig = getSubmitConfig();
+  const SubmitIcon = submitConfig.icon;
 
   const inputClass =
     "w-full bg-transparent pl-10 pr-4 py-3.5 text-sm outline-none";
@@ -1043,7 +1325,7 @@ export default function AddProducts() {
                 Product Details
               </p>
 
-              {/* Form fields - same as before */}
+              {/* Form fields */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="flex flex-col gap-1.5">
                   <FieldLabel>Product Name *</FieldLabel>
@@ -1321,7 +1603,7 @@ export default function AddProducts() {
                 </div>
               </div>
 
-              {/* ═══ UPDATED: Single Product Images with Edit Button ═══ */}
+              {/* Single Product Images with Edit Button */}
               <div className="flex flex-col gap-1.5">
                 <div className="flex items-center justify-between">
                   <FieldLabel>Product Images (Max 8)</FieldLabel>
@@ -1364,7 +1646,6 @@ export default function AddProducts() {
                               Primary
                             </span>
                           )}
-                          {/* Edit button - visible on hover */}
                           <div className="absolute inset-0 flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-black/40">
                             <button
                               onClick={() => handleEditImage(image)}
@@ -1381,7 +1662,6 @@ export default function AddProducts() {
                               <X size={14} color={Colors.error} />
                             </button>
                           </div>
-                          {/* Edit icon always visible */}
                           <button
                             onClick={() => handleEditImage(image)}
                             className="absolute top-1 right-1 p-1.5 rounded-full bg-black/50 hover:bg-black/70 transition-colors"
@@ -1481,112 +1761,172 @@ export default function AddProducts() {
           </div>
         )}
 
-        {/* ═══ TAB: BULK UPLOAD (unchanged except for removeRow fix) ═══ */}
+        {/* ═══ TAB: BULK OPERATIONS ═══ */}
         {tab === "bulk" && (
           <div className="flex flex-col gap-5">
-            {/* Same bulk upload UI as before */}
+            {/* ── Bulk Operation Tabs ── */}
+            <div className="flex gap-2">
+              {(
+                [
+                  { id: "upload", label: "Upload New", icon: Upload },
+                  { id: "update", label: "Update Existing", icon: RefreshCw },
+                  { id: "delete", label: "Delete Products", icon: FileX },
+                ] as const
+              ).map((op) => (
+                <button
+                  key={op.id}
+                  onClick={() => {
+                    setBulkOperation(op.id as BulkOperation);
+                    setBulkRows([]);
+                    setBulkResult(null);
+                    bulkFileRef.current = null;
+                    if (fileInputRef.current) fileInputRef.current.value = "";
+                  }}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all duration-200"
+                  style={{
+                    background:
+                      bulkOperation === op.id
+                        ? op.id === "delete"
+                          ? `linear-gradient(135deg, ${Colors.error}, #dc2626)`
+                          : `linear-gradient(135deg, ${Colors.gradientStart}, ${Colors.gradientEnd})`
+                        : Colors.surface,
+                    color:
+                      bulkOperation === op.id
+                        ? Colors.white
+                        : Colors.textSecondary,
+                    border: `1.5px solid ${bulkOperation === op.id ? "transparent" : Colors.border}`,
+                    boxShadow:
+                      bulkOperation === op.id
+                        ? "0 4px 14px rgba(0,168,132,0.3)"
+                        : "none",
+                  }}
+                >
+                  <op.icon size={17} strokeWidth={2} />
+                  {op.label}
+                </button>
+              ))}
+            </div>
+
+            {/* ── Info Banner ── */}
             <div
               className="rounded-3xl p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
               style={{
-                background: Colors.primaryLight,
-                border: `1px solid ${Colors.accentLight}`,
+                background:
+                  bulkOperation === "delete" ? "#FFF5F6" : Colors.primaryLight,
+                border: `1px solid ${bulkOperation === "delete" ? "#FFD0DA" : Colors.accentLight}`,
               }}
             >
               <div className="flex flex-col gap-2 flex-1">
                 <p
                   className="text-sm font-bold"
-                  style={{ color: Colors.accent }}
+                  style={{
+                    color:
+                      bulkOperation === "delete" ? Colors.error : Colors.accent,
+                  }}
                 >
-                  📋 How Bulk Upload Works
+                  {bulkOperation === "update"
+                    ? "🔄 How Bulk Update Works"
+                    : bulkOperation === "delete"
+                      ? "🗑️ How Bulk Delete Works"
+                      : "📋 How Bulk Upload Works"}
                 </p>
                 <p
                   className="text-xs leading-relaxed"
                   style={{ color: Colors.textSecondary }}
                 >
-                  Download CSV template → fill products with{" "}
-                  <strong>
-                    image URLs in separate columns (image_1 to image_8)
-                  </strong>{" "}
-                  → upload.
-                  <br />
-                  <strong>✅ Supported image sources:</strong>
+                  {getOperationDescription()}
                 </p>
 
-                <div
-                  className="rounded-xl p-3 mt-1"
-                  style={{ background: Colors.surface }}
-                >
-                  <p
-                    className="text-xs font-semibold flex items-center gap-1"
-                    style={{ color: Colors.primary }}
+                {bulkOperation !== "delete" && (
+                  <div
+                    className="rounded-xl p-3 mt-1"
+                    style={{ background: Colors.surface }}
                   >
-                    <Cloud size={14} /> Google Drive Images
-                  </p>
-                  <p
-                    className="text-xs mt-1"
-                    style={{ color: Colors.textSecondary }}
-                  >
-                    Share your image from Google Drive with{" "}
-                    <strong style={{ color: Colors.accent }}>
-                      "Anyone with the link"
-                    </strong>{" "}
-                    access, then use the share link:
-                  </p>
-                  <code
-                    className="block mt-1 p-2 rounded-lg text-xs"
-                    style={{
-                      background: Colors.surfaceAlt,
-                      color: Colors.textPrimary,
-                      wordBreak: "break-all",
-                      fontSize: "11px",
-                    }}
-                  >
-                    https://drive.google.com/file/d/1wun_oCHqlzNhSsZeCPW_aEV47J7t3jW6/view?usp=drive_link
-                  </code>
-                  <p
-                    className="text-xs mt-1"
-                    style={{ color: Colors.textMuted }}
-                  >
-                    The system will automatically convert it to a direct image
-                    URL.
-                  </p>
-                </div>
+                    <p
+                      className="text-xs font-semibold flex items-center gap-1"
+                      style={{ color: Colors.primary }}
+                    >
+                      <Cloud size={14} /> Google Drive Images
+                    </p>
+                    <p
+                      className="text-xs mt-1"
+                      style={{ color: Colors.textSecondary }}
+                    >
+                      Share your image from Google Drive with{" "}
+                      <strong style={{ color: Colors.accent }}>
+                        "Anyone with the link"
+                      </strong>{" "}
+                      access, then use the share link:
+                    </p>
+                    <code
+                      className="block mt-1 p-2 rounded-lg text-xs"
+                      style={{
+                        background: Colors.surfaceAlt,
+                        color: Colors.textPrimary,
+                        wordBreak: "break-all",
+                        fontSize: "11px",
+                      }}
+                    >
+                      https://drive.google.com/file/d/1wun_oCHqlzNhSsZeCPW_aEV47J7t3jW6/view?usp=drive_link
+                    </code>
+                    <p
+                      className="text-xs mt-1"
+                      style={{ color: Colors.textMuted }}
+                    >
+                      The system will automatically convert it to a direct image
+                      URL.
+                    </p>
+                  </div>
+                )}
 
-                <p
-                  className="text-xs mt-1"
-                  style={{ color: Colors.textSecondary }}
-                >
-                  Required: <strong>name</strong>, <strong>category</strong>,{" "}
-                  <strong>price</strong>, <strong>stock</strong>.
-                </p>
-                <div className="flex flex-col gap-1 mt-1">
-                  <p
-                    className="text-xs font-semibold"
-                    style={{ color: Colors.textSecondary }}
-                  >
-                    ✅ Valid Categories:
-                  </p>
-                  <p
-                    className="text-xs leading-relaxed"
-                    style={{ color: Colors.textMuted }}
-                  >
-                    {CATEGORIES.map((c) => c.id).join(", ")}
-                  </p>
-                </div>
+                {bulkOperation === "upload" && (
+                  <>
+                    <p
+                      className="text-xs mt-1"
+                      style={{ color: Colors.textSecondary }}
+                    >
+                      Required: <strong>name</strong>, <strong>category</strong>
+                      , <strong>price</strong>, <strong>stock</strong>.
+                    </p>
+                    <div className="flex flex-col gap-1 mt-1">
+                      <p
+                        className="text-xs font-semibold"
+                        style={{ color: Colors.textSecondary }}
+                      >
+                        ✅ Valid Categories:
+                      </p>
+                      <p
+                        className="text-xs leading-relaxed"
+                        style={{ color: Colors.textMuted }}
+                      >
+                        {CATEGORIES.map((c) => c.id).join(", ")}
+                      </p>
+                    </div>
+                  </>
+                )}
               </div>
               <button
-                onClick={downloadTemplate}
+                onClick={
+                  bulkOperation === "delete"
+                    ? downloadDeleteTemplate
+                    : downloadTemplate
+                }
                 className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-semibold whitespace-nowrap flex-shrink-0 self-start sm:self-center"
                 style={{
-                  background: `linear-gradient(135deg, ${Colors.gradientStart}, ${Colors.gradientEnd})`,
+                  background:
+                    bulkOperation === "delete"
+                      ? `linear-gradient(135deg, ${Colors.error}, #dc2626)`
+                      : `linear-gradient(135deg, ${Colors.gradientStart}, ${Colors.gradientEnd})`,
                   color: Colors.white,
-                  boxShadow: `0 4px 12px rgba(0,168,132,0.3)`,
+                  boxShadow: "0 4px 12px rgba(0,168,132,0.3)",
                 }}
               >
-                <Download size={16} strokeWidth={2} /> Download Template
+                <Download size={16} strokeWidth={2} /> Download{" "}
+                {bulkOperation === "delete" ? "Delete" : ""} Template
               </button>
             </div>
 
+            {/* ── Drag & Drop Area ── */}
             <div
               className="rounded-3xl flex flex-col items-center justify-center gap-3 cursor-pointer transition-all duration-200"
               style={{
@@ -1649,35 +1989,10 @@ export default function AddProducts() {
               </div>
             </div>
 
-            {bulkUploadResult && bulkUploadResult.failedCount > 0 && (
-              <div
-                className="rounded-2xl p-4 flex flex-col gap-2"
-                style={{ background: "#FFF5F6", border: `1px solid #FFD0DA` }}
-              >
-                <p
-                  className="text-sm font-bold"
-                  style={{ color: Colors.error }}
-                >
-                  ⚠️ {bulkUploadResult.failedCount} row
-                  {bulkUploadResult.failedCount > 1 ? "s" : ""} failed on server
-                </p>
-                <div className="flex flex-col gap-1 max-h-40 overflow-y-auto">
-                  {bulkUploadResult.failedRows?.map((fr: any, i: number) => (
-                    <p
-                      key={i}
-                      className="text-xs"
-                      style={{ color: Colors.textSecondary }}
-                    >
-                      Row {fr.row}:{" "}
-                      {typeof fr.errors === "object"
-                        ? JSON.stringify(fr.errors)
-                        : fr.errors}
-                    </p>
-                  ))}
-                </div>
-              </div>
-            )}
+            {/* ── Result Summary ── */}
+            {getResultSummary()}
 
+            {/* ── Parsed Rows Table ── */}
             {bulkRows.length > 0 && (
               <div
                 className="rounded-3xl overflow-hidden"
@@ -1721,8 +2036,9 @@ export default function AddProducts() {
                   <button
                     onClick={() => {
                       setBulkRows([]);
-                      setBulkUploadResult(null);
+                      setBulkResult(null);
                       bulkFileRef.current = null;
+                      if (fileInputRef.current) fileInputRef.current.value = "";
                     }}
                     className="text-xs font-medium flex items-center gap-1"
                     style={{ color: Colors.textMuted }}
@@ -1732,11 +2048,12 @@ export default function AddProducts() {
                 </div>
 
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[900px]">
+                  <table className="w-full min-w-[1000px]">
                     <thead>
                       <tr style={{ background: Colors.surfaceAlt }}>
                         {[
                           "",
+                          "SKU",
                           "Name",
                           "Brand",
                           "Category",
@@ -1789,6 +2106,12 @@ export default function AddProducts() {
                                 </span>
                               </div>
                             )}
+                          </td>
+                          <td
+                            className="px-4 py-3 text-sm font-mono max-w-[120px] truncate"
+                            style={{ color: Colors.textSecondary }}
+                          >
+                            {row.sku || "—"}
                           </td>
                           <td
                             className="px-4 py-3 text-sm font-medium max-w-[180px] truncate"
@@ -1871,7 +2194,7 @@ export default function AddProducts() {
                     }
                     className="flex items-center gap-2 px-6 py-3 rounded-2xl text-sm font-semibold transition-all duration-200"
                     style={{
-                      background: `linear-gradient(135deg, ${Colors.gradientStart}, ${Colors.gradientEnd})`,
+                      background: submitConfig.buttonBg,
                       color: Colors.white,
                       opacity:
                         bulkSubmitting ||
@@ -1879,18 +2202,17 @@ export default function AddProducts() {
                           ? 0.6
                           : 1,
                       cursor: bulkSubmitting ? "not-allowed" : "pointer",
-                      boxShadow: `0 4px 14px rgba(0,168,132,0.3)`,
+                      boxShadow: "0 4px 14px rgba(0,168,132,0.3)",
                     }}
                   >
                     {bulkSubmitting ? (
                       <>
-                        <Spinner /> Uploading to server…
+                        <Spinner /> Processing…
                       </>
                     ) : (
                       <>
-                        <Upload size={16} strokeWidth={2} /> Upload{" "}
-                        {bulkRows.filter((r) => r.status === "valid").length}{" "}
-                        Valid Products
+                        <SubmitIcon size={16} strokeWidth={2} />{" "}
+                        {submitConfig.label}
                       </>
                     )}
                   </button>

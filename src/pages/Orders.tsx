@@ -24,8 +24,8 @@ import Colors from "../constants/colors";
 
 // ─── API Base URL ────────────────────────────────────────────────────────────
 // const API_BASE = "https://customer-7bcb.onrender.com";
-const API_BASE = "https://customer-xnab.onrender.com";
-// const API_BASE = "http://localhost:5000";
+// const API_BASE = "https://customer-xnab.onrender.com";
+const API_BASE = "http://localhost:5000";
 // ─── Types matching backend ──────────────────────────────────────────────────
 interface OrderItemImage {
   url: string;
@@ -275,7 +275,9 @@ function buildWhatsAppMessage(order: Order): string {
     ``,
     `\u{1F4B0} *Bill Summary*`,
     `Subtotal: \u20B9${order.subtotal?.toLocaleString("en-IN") || 0}`,
-    order.couponDiscount > 0 ? `Discount: -\u20B9${order.couponDiscount}` : null,
+    order.couponDiscount > 0
+      ? `Discount: -\u20B9${order.couponDiscount}`
+      : null,
     `Delivery: ${order.deliveryCharge === 0 ? "FREE" : `\u20B9${order.deliveryCharge}`}`,
     `Platform Fee: \u20B9${order.platformFee || 0}`,
     `GST: \u20B9${order.gst || 0}`,
