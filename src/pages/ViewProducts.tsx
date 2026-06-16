@@ -133,25 +133,12 @@ function ProductImage({
   const [err, setErr] = useState(false);
   const primaryImage =
     images?.find((img) => img.isPrimary)?.url || images?.[0]?.url;
+
+  // ✅ Hide completely if no image or error
   if (!primaryImage || err) {
-    return (
-      <div
-        className="flex items-center justify-center rounded-2xl flex-shrink-0"
-        style={{
-          width: fill ? "100%" : size,
-          height: fill ? "100%" : size,
-          background: Colors.surfaceAlt,
-          border: `1px solid ${Colors.border}`,
-        }}
-      >
-        <ImageOff
-          size={fill ? 40 : size * 0.4}
-          color={Colors.border}
-          strokeWidth={1.5}
-        />
-      </div>
-    );
+    return null;
   }
+
   if (fill) {
     return (
       <img
@@ -743,7 +730,11 @@ function EditModal({
                   e.currentTarget.style.background = Colors.surface;
                 }}
               >
-                <ImageOff size={28} color={Colors.textMuted} strokeWidth={1.5} />
+                <ImageOff
+                  size={28}
+                  color={Colors.textMuted}
+                  strokeWidth={1.5}
+                />
                 <span
                   className="text-xs font-semibold"
                   style={{ color: Colors.textMuted }}
@@ -838,7 +829,10 @@ function EditModal({
             </div>
             <div className="flex flex-col gap-1.5">
               <FieldLabel>Original Price (₹)</FieldLabel>
-              <InputBox focused={focused === "originalPrice"} icon={IndianRupee}>
+              <InputBox
+                focused={focused === "originalPrice"}
+                icon={IndianRupee}
+              >
                 <input
                   className={inputClass}
                   style={inputStyle}
@@ -1442,7 +1436,10 @@ export default function ViewProducts() {
           </button>
         </div>
 
-        {(search || categoryFilter !== "all" || stockFilter !== "All" || showInactive) && (
+        {(search ||
+          categoryFilter !== "all" ||
+          stockFilter !== "All" ||
+          showInactive) && (
           <p className="text-xs" style={{ color: Colors.textMuted }}>
             Showing{" "}
             <span
@@ -1745,7 +1742,11 @@ export default function ViewProducts() {
                           key={product._id}
                           style={{
                             borderTop: `1px solid ${Colors.divider}`,
-                            opacity: isPending ? 0.7 : !product.isActive ? 0.65 : 1,
+                            opacity: isPending
+                              ? 0.7
+                              : !product.isActive
+                                ? 0.65
+                                : 1,
                           }}
                           onMouseEnter={(e) =>
                             (e.currentTarget.style.background =
@@ -1863,7 +1864,8 @@ export default function ViewProducts() {
                                   color: Colors.info,
                                 }}
                                 onMouseEnter={(e) => {
-                                  e.currentTarget.style.background = Colors.info;
+                                  e.currentTarget.style.background =
+                                    Colors.info;
                                   e.currentTarget.style.color = Colors.white;
                                 }}
                                 onMouseLeave={(e) => {
@@ -1881,7 +1883,8 @@ export default function ViewProducts() {
                                   color: Colors.error,
                                 }}
                                 onMouseEnter={(e) => {
-                                  e.currentTarget.style.background = Colors.error;
+                                  e.currentTarget.style.background =
+                                    Colors.error;
                                   e.currentTarget.style.color = Colors.white;
                                 }}
                                 onMouseLeave={(e) => {
