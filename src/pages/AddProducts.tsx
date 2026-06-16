@@ -2051,25 +2051,59 @@ export default function AddProducts() {
                   <table className="w-full min-w-[1000px]">
                     <thead>
                       <tr style={{ background: Colors.surfaceAlt }}>
-                        {[
-                          "",
-                          "SKU",
-                          "Name",
-                          "Brand",
-                          "Category",
-                          "Price",
-                          "Stock",
-                          "Images",
-                          "",
-                        ].map((h) => (
-                          <th
-                            key={h}
-                            className="px-4 py-3 text-left text-xs font-semibold tracking-wide uppercase"
-                            style={{ color: Colors.textSecondary }}
-                          >
-                            {h}
-                          </th>
-                        ))}
+                        {bulkOperation === "update"
+                          ? [
+                              "",
+                              "SKU",
+                              "Name",
+                              "Brand",
+                              "Category",
+                              "Price",
+                              "Orig. Price",
+                              "Stock",
+                              "Min Qty",
+                              "Max Qty",
+                              "Description",
+                              "Images",
+                              "",
+                            ].map((h) => (
+                              <th
+                                key={h}
+                                className="px-3 py-3 text-left text-xs font-semibold tracking-wide uppercase whitespace-nowrap"
+                                style={{ color: Colors.textSecondary }}
+                              >
+                                {h}
+                              </th>
+                            ))
+                          : bulkOperation === "delete"
+                            ? ["", "Name", "Brand", "Category", ""].map((h) => (
+                                <th
+                                  key={h}
+                                  className="px-4 py-3 text-left text-xs font-semibold tracking-wide uppercase"
+                                  style={{ color: Colors.textSecondary }}
+                                >
+                                  {h}
+                                </th>
+                              ))
+                            : [
+                                "",
+                                "SKU",
+                                "Name",
+                                "Brand",
+                                "Category",
+                                "Price",
+                                "Stock",
+                                "Images",
+                                "",
+                              ].map((h) => (
+                                <th
+                                  key={h}
+                                  className="px-4 py-3 text-left text-xs font-semibold tracking-wide uppercase"
+                                  style={{ color: Colors.textSecondary }}
+                                >
+                                  {h}
+                                </th>
+                              ))}
                       </tr>
                     </thead>
                     <tbody>
@@ -2084,6 +2118,7 @@ export default function AddProducts() {
                                 : "transparent",
                           }}
                         >
+                          {/* Status */}
                           <td className="px-4 py-3">
                             {row.status === "valid" ? (
                               <CheckCircle2
@@ -2107,75 +2142,232 @@ export default function AddProducts() {
                               </div>
                             )}
                           </td>
-                          <td
-                            className="px-4 py-3 text-sm font-mono max-w-[120px] truncate"
-                            style={{ color: Colors.textSecondary }}
-                          >
-                            {row.sku || "—"}
-                          </td>
-                          <td
-                            className="px-4 py-3 text-sm font-medium max-w-[180px] truncate"
-                            style={{ color: Colors.textPrimary }}
-                          >
-                            {row.name || "—"}
-                          </td>
-                          <td
-                            className="px-4 py-3 text-sm max-w-[120px] truncate"
-                            style={{ color: Colors.textSecondary }}
-                          >
-                            {row.brand || "—"}
-                          </td>
-                          <td
-                            className="px-4 py-3 text-sm"
-                            style={{ color: Colors.textSecondary }}
-                          >
-                            {row.category || "—"}
-                          </td>
-                          <td
-                            className="px-4 py-3 text-sm font-semibold"
-                            style={{ color: Colors.primary }}
-                          >
-                            {row.price ? `₹${row.price}` : "—"}
-                          </td>
-                          <td
-                            className="px-4 py-3 text-sm"
-                            style={{ color: Colors.textSecondary }}
-                          >
-                            {row.stock || "—"}
-                          </td>
-                          <td className="px-4 py-3">
-                            {row.image_urls ? (
-                              <span
-                                className="text-xs px-2 py-0.5 rounded-lg"
-                                style={{
-                                  background: Colors.primaryLight,
-                                  color: Colors.primary,
-                                }}
+
+                          {bulkOperation === "update" ? (
+                            <>
+                              {/* SKU */}
+                              <td
+                                className="px-3 py-3 text-sm font-mono max-w-[100px] truncate"
+                                style={{ color: Colors.textSecondary }}
                               >
-                                {
-                                  row.image_urls.split(",").filter(Boolean)
-                                    .length
-                                }{" "}
-                                images
-                              </span>
-                            ) : (
-                              <span
-                                className="text-xs"
-                                style={{ color: Colors.textMuted }}
+                                {row.sku || "—"}
+                              </td>
+                              {/* Name */}
+                              <td
+                                className="px-3 py-3 text-sm font-medium max-w-[150px] truncate"
+                                style={{ color: Colors.textPrimary }}
                               >
-                                —
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3">
-                            <button
-                              onClick={() => removeRow(row.id)}
-                              className="p-1.5 rounded-lg"
-                              style={{ color: Colors.textMuted }}
-                            >
-                              <Trash2 size={15} strokeWidth={2} />
-                            </button>
-                          </td>
+                                {row.name || "—"}
+                              </td>
+                              {/* Brand */}
+                              <td
+                                className="px-3 py-3 text-sm max-w-[100px] truncate"
+                                style={{ color: Colors.textSecondary }}
+                              >
+                                {row.brand || "—"}
+                              </td>
+                              {/* Category */}
+                              <td
+                                className="px-3 py-3 text-sm max-w-[120px] truncate"
+                                style={{ color: Colors.textSecondary }}
+                              >
+                                {row.category || "—"}
+                              </td>
+                              {/* Price */}
+                              <td
+                                className="px-3 py-3 text-sm font-semibold whitespace-nowrap"
+                                style={{ color: Colors.primary }}
+                              >
+                                {row.price ? `₹${row.price}` : "—"}
+                              </td>
+                              {/* Original Price */}
+                              <td
+                                className="px-3 py-3 text-sm whitespace-nowrap"
+                                style={{ color: Colors.textSecondary }}
+                              >
+                                {row.originalPrice
+                                  ? `₹${row.originalPrice}`
+                                  : "—"}
+                              </td>
+                              {/* Stock */}
+                              <td
+                                className="px-3 py-3 text-sm whitespace-nowrap"
+                                style={{ color: Colors.textSecondary }}
+                              >
+                                {row.stock || "—"}
+                              </td>
+                              {/* Min Order Qty */}
+                              <td
+                                className="px-3 py-3 text-sm whitespace-nowrap"
+                                style={{ color: Colors.textSecondary }}
+                              >
+                                {row.min_order_qty || "1"}
+                              </td>
+                              {/* Max Order Qty */}
+                              <td
+                                className="px-3 py-3 text-sm whitespace-nowrap"
+                                style={{ color: Colors.textSecondary }}
+                              >
+                                {row.max_order_qty || "—"}
+                              </td>
+                              {/* Description */}
+                              <td
+                                className="px-3 py-3 text-sm max-w-[150px] truncate"
+                                style={{ color: Colors.textSecondary }}
+                              >
+                                {row.description || "—"}
+                              </td>
+                              {/* Images */}
+                              <td className="px-3 py-3">
+                                {row.image_urls ? (
+                                  <span
+                                    className="text-xs px-2 py-0.5 rounded-lg whitespace-nowrap"
+                                    style={{
+                                      background: Colors.primaryLight,
+                                      color: Colors.primary,
+                                    }}
+                                  >
+                                    {
+                                      row.image_urls.split(",").filter(Boolean)
+                                        .length
+                                    }{" "}
+                                    images
+                                  </span>
+                                ) : (
+                                  <span
+                                    className="text-xs"
+                                    style={{ color: Colors.textMuted }}
+                                  >
+                                    —
+                                  </span>
+                                )}
+                              </td>
+                              {/* Delete row button */}
+                              <td className="px-3 py-3">
+                                <button
+                                  onClick={() => removeRow(row.id)}
+                                  className="p-1.5 rounded-lg"
+                                  style={{ color: Colors.textMuted }}
+                                >
+                                  <Trash2 size={15} strokeWidth={2} />
+                                </button>
+                              </td>
+                            </>
+                          ) : bulkOperation === "delete" ? (
+                            <>
+                              {/* Name */}
+                              <td
+                                className="px-4 py-3 text-sm font-medium max-w-[180px] truncate"
+                                style={{ color: Colors.textPrimary }}
+                              >
+                                {row.name || "—"}
+                              </td>
+                              {/* Brand */}
+                              <td
+                                className="px-4 py-3 text-sm max-w-[120px] truncate"
+                                style={{ color: Colors.textSecondary }}
+                              >
+                                {row.brand || "—"}
+                              </td>
+                              {/* Category */}
+                              <td
+                                className="px-4 py-3 text-sm"
+                                style={{ color: Colors.textSecondary }}
+                              >
+                                {row.category || "—"}
+                              </td>
+                              {/* Delete row button */}
+                              <td className="px-4 py-3">
+                                <button
+                                  onClick={() => removeRow(row.id)}
+                                  className="p-1.5 rounded-lg"
+                                  style={{ color: Colors.textMuted }}
+                                >
+                                  <Trash2 size={15} strokeWidth={2} />
+                                </button>
+                              </td>
+                            </>
+                          ) : (
+                            <>
+                              {/* SKU */}
+                              <td
+                                className="px-4 py-3 text-sm font-mono max-w-[120px] truncate"
+                                style={{ color: Colors.textSecondary }}
+                              >
+                                {row.sku || "—"}
+                              </td>
+                              {/* Name */}
+                              <td
+                                className="px-4 py-3 text-sm font-medium max-w-[180px] truncate"
+                                style={{ color: Colors.textPrimary }}
+                              >
+                                {row.name || "—"}
+                              </td>
+                              {/* Brand */}
+                              <td
+                                className="px-4 py-3 text-sm max-w-[120px] truncate"
+                                style={{ color: Colors.textSecondary }}
+                              >
+                                {row.brand || "—"}
+                              </td>
+                              {/* Category */}
+                              <td
+                                className="px-4 py-3 text-sm"
+                                style={{ color: Colors.textSecondary }}
+                              >
+                                {row.category || "—"}
+                              </td>
+                              {/* Price */}
+                              <td
+                                className="px-4 py-3 text-sm font-semibold"
+                                style={{ color: Colors.primary }}
+                              >
+                                {row.price ? `₹${row.price}` : "—"}
+                              </td>
+                              {/* Stock */}
+                              <td
+                                className="px-4 py-3 text-sm"
+                                style={{ color: Colors.textSecondary }}
+                              >
+                                {row.stock || "—"}
+                              </td>
+                              {/* Images */}
+                              <td className="px-4 py-3">
+                                {row.image_urls ? (
+                                  <span
+                                    className="text-xs px-2 py-0.5 rounded-lg"
+                                    style={{
+                                      background: Colors.primaryLight,
+                                      color: Colors.primary,
+                                    }}
+                                  >
+                                    {
+                                      row.image_urls.split(",").filter(Boolean)
+                                        .length
+                                    }{" "}
+                                    images
+                                  </span>
+                                ) : (
+                                  <span
+                                    className="text-xs"
+                                    style={{ color: Colors.textMuted }}
+                                  >
+                                    —
+                                  </span>
+                                )}
+                              </td>
+                              {/* Delete row button */}
+                              <td className="px-4 py-3">
+                                <button
+                                  onClick={() => removeRow(row.id)}
+                                  className="p-1.5 rounded-lg"
+                                  style={{ color: Colors.textMuted }}
+                                >
+                                  <Trash2 size={15} strokeWidth={2} />
+                                </button>
+                              </td>
+                            </>
+                          )}
                         </tr>
                       ))}
                     </tbody>
