@@ -290,7 +290,8 @@ export default function SettingsPage() {
   const [customers, setCustomers] = useState<
     Array<{
       _id: string;
-      phone: string;
+      email: string;
+      phone?: string;
       profile?: { contactName?: string };
       approvalStatus: string;
       isActive: boolean;
@@ -494,7 +495,8 @@ export default function SettingsPage() {
     if (!search) return true;
     return (
       (c.profile?.contactName || "").toLowerCase().includes(search) ||
-      c.phone.includes(search)
+      (c.phone || "").includes(search) ||
+      (c.email || "").toLowerCase().includes(search)
     );
   });
 
@@ -1173,7 +1175,7 @@ export default function SettingsPage() {
                         />
                         <input
                           type="text"
-                          placeholder="Search by name or phone..."
+                          placeholder="Search by name, phone or email..."
                           value={customerSearch}
                           onChange={(e) => setCustomerSearch(e.target.value)}
                           className="w-full pl-9 pr-8 py-2.5 rounded-xl text-sm outline-none"
@@ -1363,7 +1365,7 @@ export default function SettingsPage() {
                                   background: `linear-gradient(135deg, ${Colors.gradientStart}, ${Colors.gradientEnd})`,
                                 }}
                               >
-                                {(customer.profile?.contactName || "U")
+                                {(customer.profile?.contactName || customer.email || "U")
                                   .charAt(0)
                                   .toUpperCase()}
                               </div>
@@ -1373,13 +1375,14 @@ export default function SettingsPage() {
                                   style={{ color: Colors.textPrimary }}
                                 >
                                   {customer.profile?.contactName ||
-                                    `User ${customer.phone.slice(-4)}`}
+                                    customer.email ||
+                                    (customer.phone ? `User ${customer.phone.slice(-4)}` : "Unknown User")}
                                 </p>
                                 <p
-                                  className="text-xs"
+                                  className="text-xs truncate"
                                   style={{ color: Colors.textMuted }}
                                 >
-                                  +91 {customer.phone}
+                                  {customer.phone ? `+91 ${customer.phone} • ` : ""}{customer.email}
                                 </p>
                               </div>
                               <div className="flex items-center gap-2 flex-shrink-0">
