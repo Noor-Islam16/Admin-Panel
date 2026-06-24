@@ -4,6 +4,7 @@ import {
   Trash2,
   Search,
   Phone,
+  Mail,
   MapPin,
   AlertTriangle,
   X,
@@ -22,7 +23,8 @@ import Colors from "../constants/colors";
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Customer {
   _id: string;
-  phone: string;
+  email: string;
+  phone?: string;
   role: string;
   isProfileComplete: boolean;
   approvalStatus: "auto" | "manual" | "approved" | "rejected" | "pending";
@@ -43,7 +45,7 @@ interface Customer {
 
 // ─── API Config ──────────────────────────────────────────────────────────────
 // const API_BASE = "https://customer-7bcb.onrender.com";
-const API_BASE = "https://customer-xnab.onrender.com";
+const API_BASE = "https://customer-u8ip.onrender.com";
 // const API_BASE = "http://localhost:5000";
 
 const getAuthToken = (): string | null => {
@@ -81,7 +83,8 @@ const apiFetch = async (path: string, options: RequestInit = {}) => {
 const getCustomerName = (customer: Customer): string => {
   return (
     customer.profile?.contactName ||
-    `User ${customer.phone?.slice(-4) || "Unknown"}`
+    customer.email ||
+    (customer.phone ? `User ${customer.phone.slice(-4)}` : "Unknown User")
   );
 };
 
@@ -98,7 +101,7 @@ const getCustomerAddress = (customer: Customer): string => {
   return parts.length > 0 ? parts.join(", ") : "No address added";
 };
 
-const formatPhone = (phone: string): string => {
+const formatPhone = (phone?: string): string => {
   if (!phone) return "N/A";
   return `+91 ${phone}`;
 };
@@ -237,14 +240,27 @@ function ViewCustomerModal({
               >
                 {getCustomerName(customer)}
               </h2>
-              <div className="flex items-center gap-1.5">
-                <Phone size={14} color={Colors.primary} />
-                <span
-                  className="text-sm"
-                  style={{ color: Colors.textSecondary }}
-                >
-                  {formatPhone(customer.phone)}
-                </span>
+              <div className="flex flex-col gap-1 mt-1">
+                {customer.phone && (
+                  <div className="flex items-center gap-1.5">
+                    <Phone size={13} color={Colors.primary} />
+                    <span
+                      className="text-xs"
+                      style={{ color: Colors.textSecondary }}
+                    >
+                      {formatPhone(customer.phone)}
+                    </span>
+                  </div>
+                )}
+                <div className="flex items-center gap-1.5">
+                  <Mail size={13} color={Colors.primary} />
+                  <span
+                    className="text-xs"
+                    style={{ color: Colors.textSecondary }}
+                  >
+                    {customer.email}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
@@ -890,7 +906,7 @@ export default function CustomerList() {
                   {[
                     "#",
                     "Customer",
-                    "Phone",
+                    "Contact Info",
                     "Address",
                     "Approval",
                     "Status",
@@ -973,14 +989,27 @@ export default function CustomerList() {
                           </div>
                         </td>
                         <td className="px-5 py-4">
-                          <div className="flex items-center gap-1.5">
-                            <Phone size={14} color={Colors.primary} />
-                            <span
-                              className="text-sm"
-                              style={{ color: Colors.textSecondary }}
-                            >
-                              {formatPhone(customer.phone)}
-                            </span>
+                          <div className="flex flex-col gap-1">
+                            {customer.phone && (
+                              <div className="flex items-center gap-1.5">
+                                <Phone size={13} color={Colors.primary} />
+                                <span
+                                  className="text-xs"
+                                  style={{ color: Colors.textSecondary }}
+                                >
+                                  {formatPhone(customer.phone)}
+                                </span>
+                              </div>
+                            )}
+                            <div className="flex items-center gap-1.5">
+                              <Mail size={13} color={Colors.primary} />
+                              <span
+                                className="text-xs"
+                                style={{ color: Colors.textSecondary }}
+                              >
+                                {customer.email}
+                              </span>
+                            </div>
                           </div>
                         </td>
                         <td className="px-5 py-4 max-w-[180px]">

@@ -80,6 +80,11 @@ export default function AdminLoginPage() {
     }
   };
 
+  const handleDevBypass = () => {
+    setEmail("admin@thump.com");
+    setPassword("adminbypass");
+  };
+
   // ── Fullscreen spinner while session check is in-flight ──
   if (checkingSession) {
     return (
@@ -388,6 +393,22 @@ export default function AdminLoginPage() {
                 )}
               </button>
             </form>
+
+            {import.meta.env.DEV && (
+              <button
+                type="button"
+                onClick={handleDevBypass}
+                className="w-full mt-3 py-3 rounded-2xl text-xs font-semibold border transition-all duration-200"
+                style={{
+                  borderColor: "rgba(255, 255, 255, 0.12)",
+                  color: Colors.accent || "#00A884",
+                  background: "rgba(255, 255, 255, 0.02)",
+                  cursor: "pointer",
+                }}
+              >
+                ⚡ Autofill Development Bypass Credentials
+              </button>
+            )}
 
             {/* ── Footer Note ── */}
             <p
